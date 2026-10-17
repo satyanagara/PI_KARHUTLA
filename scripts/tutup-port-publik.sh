@@ -1,17 +1,26 @@
 #!/usr/bin/env bash
 # Menutup port lokal server aplikasi dari internet.
-#   - Host  : hanya 80/443 (Nginx) terbuka untuk umum; SSH hanya dari jaringan privat (VPN, LAN).
+#   - Host  : hanya 80/443 (Nginx) terbuka untuk umum; SSH hanya dari subnet VPN (SSH_ALLOW).
+#             Jangan izinkan seluruh 10.0.0.0/8 untuk SSH: gateway NAT dapat meneruskan serangan dari internet
+#             dengan alamat sumber gateway itu sendiri.
 #   - Docker: port container disaring di rantai DOCKER-USER (ufw biasa tidak berlaku untuk port Docker).
 #             Koneksi baru hanya diterima dari jaringan privat (reverse proxy internal, LAN, VPN, antar-container);
 #             selain itu ditolak (deny-by-default, tidak bergantung pada nama antarmuka).
 # Pengaman: keadaan firewall sebelumnya disimpan dan dipulihkan otomatis 5 menit kemudian, kecuali Anda
 # menjalankan  sudo systemctl stop firewall-rollback.timer  setelah memastikan SSH dan situs tetap normal.
 #
-# Jalankan DI SERVER aplikasi:  sudo SSH_PORT=<port ssh> bash tutup-port-publik.sh
+# Jalankan DI SERVER aplikasi:  sudo SSH_PORT=<port ssh> SSH_ALLOW="<subnet VPN>" bash tutup-port-publik.sh
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "Jalankan dengan sudo."; exit 1; }
 
 SSH_PORT="${SSH_PORT:-22}"
+SSH_ALLOW="${SSH_ALLOW:?Isi SSH_ALLOW dengan subnet VPN, mis. SSH_ALLOW=\"10.8.0.0/16\"}"
+for net in $SSH_ALLOW; do [[ "$net" =~ ^[0-9.]+/[0-9]+$ ]] || { echo "SSH_ALLOW tidak valid: $net"; exit 1; }; done
+# Pastikan sesi SSH saat ini berasal dari subnet yang diizinkan agar tidak terkunci.
+if [ -n "${SSH_CLIENT:-}" ] && command -v python3 >/dev/null; then
+  python3 -c 'import ipaddress,sys; ip=ipaddress.ip_address(sys.argv[1]); sys.exit(0 if any(ip in ipaddress.ip_network(n) for n in sys.argv[2:]) else 1)' "${SSH_CLIENT%% *}" $SSH_ALLOW \
+    || { echo "Sesi Anda (${SSH_CLIENT%% *}) di luar SSH_ALLOW; dibatalkan agar tidak terkunci."; exit 1; }
+fi
 PRIVATE_NETS="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
 SNAPSHOT=/root/firewall-sebelum-karhutla
 mkdir -p "$SNAPSHOT"
@@ -54,7 +63,7 @@ ufw default allow outgoing
 ufw default allow routed
 ufw allow 80/tcp comment "nginx http"
 ufw allow 443/tcp comment "nginx https"
-for net in $PRIVATE_NETS; do ufw allow from "$net" to any port "$SSH_PORT" proto tcp comment "ssh jaringan privat"; done
+for net in $SSH_ALLOW; do ufw allow from "$net" to any port "$SSH_PORT" proto tcp comment "ssh vpn"; done
 
 # 4. Tolak paket dengan alamat sumber yang tidak sesuai rute balik (anti-spoofing).
 cat > /etc/sysctl.d/90-rp-filter.conf <<'EOR'
