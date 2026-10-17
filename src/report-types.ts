@@ -1,14 +1,17 @@
 // Bentuk respons /api/hotspots, dipakai bersama oleh server dan halaman web.
 import type { AreaKind, Cluster, IspuLevel } from './risk.ts'
 
-export const SOURCES = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT'] as const
+// BRIN_LAPAN: hotspot resmi pemerintah (satelit SNPP & NOAA-20 olahan BRIN/LAPAN) dari SiPongi Kementerian Kehutanan.
+export const SOURCES = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT', 'BRIN_LAPAN'] as const
 export const DAY_OPTIONS = [1, 3, 5] as const
 export type Source = (typeof SOURCES)[number]
 
 // Satu titik panas dalam bentuk larik ringkas agar payload kecil:
-// [lat, lon, tanggal, jam(HHMM), confidence, frp, day/night, idx permukiman, jarak permukiman km, idx kawasan, jarak kawasan km, idx KHG]
-// Indeks -1 berarti tidak ada permukiman dalam radius pencarian / tidak dekat kawasan / bukan lahan gambut.
-export type ReportFire = [number, number, string, string, string, number, string, number, number, number, number, number]
+// [lat, lon, tanggal, jam(HHMM), confidence, frp, day/night, idx permukiman, jarak permukiman km, idx kawasan, jarak kawasan km, idx KHG, idx kabupaten]
+// Indeks -1 berarti tidak ada permukiman dalam radius pencarian / tidak dekat kawasan / bukan lahan gambut / di luar batas kabupaten.
+export type ReportFire = [number, number, string, string, string, number, string, number, number, number, number, number, number]
+
+export type RegencyRank = { name: string; province: string; total: number; high: number; nearSettlement: number; peat: number; forest: number }
 
 export type AreaRank = { name: string; kind: AreaKind; inside: number; near: number; frp: number }
 
@@ -58,10 +61,33 @@ export type Report = {
   settlementNames: string[]
   areas: { name: string; kind: AreaKind }[]
   peatUnits: string[]
+  regencyNames: string[]
   fires: ReportFire[]
+  // FRP tidak tersedia pada data BRIN/LAPAN.
+  frpAvailable: boolean
+  regencies: RegencyRank[]
   summary: ReportSummary
   areaRanking: AreaRank[]
   clusters: Cluster[]
   exposedTowns: ExposedTown[]
   smokeError: string | null
 }
+
+// Laporan harian Satgas Karhutla per provinsi prioritas, dari dashboard BNPB.
+export type BnpbProvinceReport = {
+  province: string
+  hotspots: number | null
+  fireSpots: number | null
+  burnedIndicativeHa: number | null
+  burnedTodayHa: number | null
+  airQuality: string
+  airportVisibilityKm: string
+  regenciesAffected: number | null
+  landToExtinguishHa: number | null
+  personnel: number | null
+  waterBombingLiters: number | null
+  conclusion: string
+  recommendation: string
+}
+
+export type BnpbReport = { updatedAt: string; fetchedAt: string; provinces: BnpbProvinceReport[] }

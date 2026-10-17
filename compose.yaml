@@ -9,6 +9,7 @@ services:
     environment:
       VITE_HOST: 0.0.0.0
       VITE_POLL: "1"
+      CACHE_DIR: /app/.cache
     env_file:
       - path: .env.local
         required: false

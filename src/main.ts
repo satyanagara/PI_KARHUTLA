@@ -2,12 +2,13 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, levelRank, type Cluster, type IspuLevel } from './risk.ts'
-import { DAY_OPTIONS, SOURCES, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
+import { DAY_OPTIONS, SOURCES, type BnpbReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
 const sourceNames: Record<Source, string> = {
   VIIRS_NOAA21_NRT: 'NOAA-21 · VIIRS 375 m',
   VIIRS_NOAA20_NRT: 'NOAA-20 · VIIRS 375 m',
   VIIRS_SNPP_NRT: 'Suomi-NPP · VIIRS 375 m',
+  BRIN_LAPAN: 'BRIN/LAPAN · SiPongi (resmi)',
 }
 const AREA_SOURCE = 'Kementerian Kehutanan (SIGAP)'
 const AUTO_REFRESH_MS = 10 * 60 * 1000
@@ -37,7 +38,7 @@ app.innerHTML = `
       <div class="side-bottom">
         <div class="source-card">
           <span class="source-orbit">N</span>
-          <div><strong>NASA FIRMS</strong><small>Fire Information System</small></div>
+          <div><strong id="source-card-title">NASA FIRMS</strong><small id="source-card-note">Fire Information System</small></div>
           <span class="live-dot"></span>
         </div>
         <div class="sidebar-foot">INDONESIA <span>·</span> v1.0</div>
@@ -86,6 +87,14 @@ app.innerHTML = `
           </article>
         </section>
 
+        <section class="bnpb-section" id="laporan-bnpb">
+          <div class="section-head">
+            <div><div class="section-kicker">LAPORAN RESMI SATGAS KARHUTLA · BNPB</div><h2>Kondisi lapangan di provinsi prioritas</h2></div>
+            <span class="risk-state" id="bnpb-state">Memuat laporan BNPB…</span>
+          </div>
+          <div class="bnpb-grid" id="bnpb-grid"></div>
+        </section>
+
         <section class="stats-grid" aria-label="Ringkasan hotspot">
           <article class="stat-panel stat-main">
             <div class="stat-top"><span>TITIK PANAS (KEMUNGKINAN API)</span><span class="stat-icon fire-icon">✳</span></div>
@@ -95,12 +104,12 @@ app.innerHTML = `
           <article class="stat-panel">
             <div class="stat-top"><span>KEYAKINAN TINGGI</span><span class="stat-icon high-icon">↗</span></div>
             <div class="stat-value" id="high-count">—</div>
-            <div class="stat-foot"><span class="legend-dot high"></span><span class="stat-note">Hampir pasti api, menurut NASA</span></div>
+            <div class="stat-foot"><span class="legend-dot high"></span><span class="stat-note" id="high-note">Hampir pasti api, menurut NASA</span></div>
           </article>
           <article class="stat-panel">
             <div class="stat-top"><span>KEKUATAN API (FRP)</span><span class="stat-icon frp-icon">⌁</span></div>
             <div class="stat-value"><span id="frp-total">—</span><small> MW</small></div>
-            <div class="stat-foot"><span class="legend-dot warm"></span><span class="stat-note">Makin besar, makin hebat api &amp; asapnya</span></div>
+            <div class="stat-foot"><span class="legend-dot warm"></span><span class="stat-note" id="frp-note">Makin besar, makin hebat api &amp; asapnya</span></div>
           </article>
           <article class="stat-panel stat-status">
             <div class="stat-top"><span>STATUS PEMANTAUAN</span><span class="scan-mark"><i></i><i></i><i></i></span></div>
@@ -123,7 +132,7 @@ app.innerHTML = `
             <div class="map-layers" aria-label="Lapisan peta"><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-areas" checked /> Kawasan hutan</label><label><input type="checkbox" id="layer-peat" /> Lahan gambut (KHG)</label></div>
             <div class="map-legend"><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span></div>
             <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
-            <div class="map-credit">Peta dasar © Esri, HERE, Garmin · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS</div>
+            <div class="map-credit">Peta dasar © Esri, HERE, Garmin · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
           </div>
         </section>
 
@@ -143,6 +152,10 @@ app.innerHTML = `
             <div class="panel-heading"><div><div class="section-kicker">PERKIRAAN 6 JAM KE DEPAN</div><h2>Kota &amp; kecamatan di jalur asap</h2></div><span class="result-count" id="towns-count">—</span></div>
             <p class="panel-intro">Daerah yang diperkirakan dilalui asap dari wilayah api, beserta kualitas udaranya. Klik untuk melihat di peta.</p>
             <ul class="town-list" id="town-list"><li class="area-empty">Belum ada data.</li></ul>
+          </article>
+          <article class="data-panel regency-panel">
+            <div class="panel-heading"><div><div class="section-kicker">PER WILAYAH ADMINISTRASI</div><h2>Kabupaten/kota dengan titik api terbanyak</h2></div></div>
+            <div class="table-wrap"><table class="regency-table"><thead><tr><th>KABUPATEN/KOTA</th><th>TITIK API</th><th>KEYAKINAN TINGGI</th><th>≤ ${SETTLEMENT_ALERT_KM} KM DARI PERMUKIMAN</th><th>DI LAHAN GAMBUT</th><th>DI KAWASAN HUTAN</th></tr></thead><tbody id="regency-rows"><tr><td colspan="6" class="empty-row">Belum ada data.</td></tr></tbody></table></div>
           </article>
           <div class="risk-panels">
             <article class="data-panel priority-panel">
@@ -182,7 +195,8 @@ app.innerHTML = `
           <div class="section-kicker">METODOLOGI &amp; SUMBER DATA</div>
           <h2>Cara membaca halaman ini</h2>
           <div class="about-grid">
-            <div><h3>Titik panas</h3><p>Deteksi anomali termal satelit VIIRS (375 m) dari <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS</a>, near-real-time. Data diperbarui di server setiap 10 menit.</p></div>
+            <div><h3>Titik panas</h3><p>Deteksi anomali termal satelit VIIRS (375 m) dari <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS</a>, atau data resmi BRIN/LAPAN (keyakinan sedang dan tinggi) dari <a href="https://sipongi.kehutanan.go.id/" target="_blank" rel="noreferrer">SiPongi</a>. Hanya titik di wilayah Indonesia yang dihitung. Data diperbarui di server setiap 10 menit.</p></div>
+            <div><h3>Laporan lapangan</h3><p>Firespot, luas lahan terbakar, jarak pandang bandara, dan kesimpulan Satgas berasal dari <a href="https://data.bnpb.go.id/data/karhutla2026" target="_blank" rel="noreferrer">Dashboard Karhutla BNPB</a>, diperbarui setiap 15 menit.</p></div>
             <div><h3>Kedekatan</h3><p>Jarak tiap titik ke permukiman terdekat (<a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames</a>, ±257 ribu desa/kota) dan ke batas kawasan konservasi atau hutan lindung menurut peta resmi Kawasan Hutan 1:250.000 status Juni 2026, serta apakah titik berada di Kesatuan Hidrologis Gambut. Keduanya dari <a href="https://sigap.kehutanan.go.id/" target="_blank" rel="noreferrer">SIGAP Kementerian Kehutanan</a>.</p></div>
             <div><h3>Asap &amp; ISPU</h3><p>Titik dikelompokkan per ±20 km. Untuk 30 kluster teratas, angin dan PM2.5 diambil dari <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (model CAMS). Kategori mengikuti ISPU PM2.5 rata-rata 24 jam (PermenLHK P.14/2020). Jalur asap adalah kerucut 6 jam searah angin.</p></div>
             <div><h3>Istilah</h3><p><b>Titik panas</b>: lokasi yang jauh lebih panas dari sekitarnya menurut satelit, umumnya api. <b>FRP</b>: kekuatan api dalam megawatt. <b>PM2.5</b>: partikel asap halus yang masuk ke paru-paru. <b>ISPU</b>: Indeks Standar Pencemar Udara. <b>KHG</b>: Kesatuan Hidrologis Gambut.</p></div>
@@ -309,6 +323,59 @@ function renderTowns(data: Report) {
     : '<li class="area-empty">Tidak ada kota yang diperkirakan dilalui asap berkategori sedang atau lebih buruk.</li>'
 }
 
+function renderRegencies(data: Report) {
+  const cell = (value: number, total: number) => `${numberFormat.format(value)}${value ? `<small>${Math.round((value / total) * 100)}%</small>` : ''}`
+  byId('regency-rows').innerHTML = data.regencies.length ? data.regencies.slice(0, 15).map((regency) => `
+    <tr><td><strong>${escapeHtml(regency.name)}</strong><small>${escapeHtml(regency.province)}</small></td><td><strong>${numberFormat.format(regency.total)}</strong></td><td>${cell(regency.high, regency.total)}</td><td>${cell(regency.nearSettlement, regency.total)}</td><td>${cell(regency.peat, regency.total)}</td><td>${cell(regency.forest, regency.total)}</td></tr>`).join('')
+    : '<tr><td colspan="6" class="empty-row">Tidak ada titik api.</td></tr>'
+}
+
+// Warna kategori udara dari teks laporan BNPB, mengambil kategori terburuk yang disebut.
+function bnpbLevel(text: string): IspuLevel {
+  const value = text.toLowerCase()
+  const key = value.includes('berbahaya') ? 'berbahaya'
+    : value.includes('sangat tidak sehat') ? 'sangat-tidak-sehat'
+    : value.includes('tidak sehat') ? 'tidak-sehat'
+    : value.includes('sedang') ? 'sedang'
+    : value.includes('baik') ? 'baik' : 'na'
+  return ISPU_LEVELS.find((level) => level.key === key) ?? { key: 'na', label: 'Tidak ada data', color: '#9aa69f' }
+}
+
+function renderBnpb(data: BnpbReport) {
+  const hectare = (value: number | null) => value === null ? '–' : `${numberFormat.format(Math.round(value))} ha`
+  const updated = data.updatedAt ? wibFormat.format(new Date(data.updatedAt)) : wibFormat.format(new Date(data.fetchedAt))
+  byId('bnpb-state').textContent = `Sumber: BNPB · diperbarui ${updated} WIB`
+  byId('bnpb-state').className = 'risk-state'
+  byId('bnpb-grid').innerHTML = data.provinces.map((province) => {
+    const level = bnpbLevel(province.airQuality)
+    return `
+    <article class="bnpb-card" style="--level:${level.color}">
+      <div class="bnpb-head"><h3>${escapeHtml(province.province)}</h3><span class="ispu-badge ${level.key}">${escapeHtml(province.airQuality || 'Tidak dilaporkan')}</span></div>
+      <dl class="bnpb-stats">
+        <div><dt>Titik api terverifikasi</dt><dd>${province.fireSpots ?? '–'}</dd></div>
+        <div><dt>Terbakar hari ini</dt><dd>${hectare(province.burnedTodayHa)}</dd></div>
+        <div><dt>Jarak pandang bandara</dt><dd>${province.airportVisibilityKm ? `${escapeHtml(province.airportVisibilityKm)} km` : '–'}</dd></div>
+        <div><dt>Kab/kota terdampak</dt><dd>${province.regenciesAffected ?? '–'}</dd></div>
+        <div><dt>Total lahan terbakar</dt><dd>${hectare(province.burnedIndicativeHa)}</dd></div>
+        <div><dt>Personel dikerahkan</dt><dd>${province.personnel === null ? '–' : numberFormat.format(province.personnel)}</dd></div>
+      </dl>
+      ${province.conclusion ? `<details><summary>Kesimpulan Satgas</summary><p>${escapeHtml(province.conclusion)}</p>${province.recommendation ? `<p><b>Rekomendasi:</b> ${escapeHtml(province.recommendation)}</p>` : ''}</details>` : ''}
+    </article>`
+  }).join('') || '<p class="area-empty">Belum ada laporan.</p>'
+}
+
+async function loadBnpb() {
+  try {
+    const response = await fetch('/api/laporan-bnpb')
+    const body = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(body?.error ?? `Server merespons ${response.status}`)
+    renderBnpb(body as BnpbReport)
+  } catch (error) {
+    byId('bnpb-state').textContent = error instanceof Error ? error.message : 'Laporan BNPB tidak tersedia.'
+    byId('bnpb-state').className = 'risk-state error'
+  }
+}
+
 function formatPm(value: number | null) {
   return value === null ? '–' : `${Math.round(value)} µg/m³`
 }
@@ -348,12 +415,12 @@ function setError(message: string) {
 // ---------- Render ----------
 
 function firePopup(fire: ReportFire) {
-  const [lat, lon, date, time, confidence, frp, , settlementIndex, settlementKm, areaIndex, areaKm, peatIndex] = fire
+  const [lat, lon, date, time, confidence, frp, , settlementIndex, settlementKm, areaIndex, areaKm, peatIndex, regencyIndex] = fire
   const lines = [
     '<strong>Titik panas (kemungkinan api)</strong>',
     `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
-    `Keyakinan: ${({ high: 'tinggi', medium: 'sedang', low: 'rendah' } as const)[confidenceOf(confidence)]} · kekuatan ${frp.toFixed(1)} MW`,
-    `${escapeHtml(date)} ${escapeHtml(time.slice(0, 2))}:${escapeHtml(time.slice(2))} UTC`,
+    `Keyakinan: ${({ high: 'tinggi', medium: 'sedang', low: 'rendah' } as const)[confidenceOf(confidence)]}${report?.frpAvailable === false ? '' : ` · kekuatan ${frp.toFixed(1)} MW`}`,
+    `${escapeHtml(date)} ${escapeHtml(time.slice(0, 2))}:${escapeHtml(time.slice(2))} UTC${regencyIndex >= 0 ? ` · ${escapeHtml(report!.regencyNames[regencyIndex])}` : ''}`,
     settlementIndex >= 0 ? `Permukiman terdekat: <b>${escapeHtml(report!.settlementNames[settlementIndex])}</b> (${formatKm(settlementKm)})` : 'Tidak ada permukiman dalam 10 km',
   ]
   if (areaIndex >= 0) lines.push(`${areaKm === 0 ? 'Di dalam' : `${formatKm(areaKm)} dari`} <b>${escapeHtml(report!.areas[areaIndex].name)}</b>`)
@@ -425,7 +492,7 @@ function renderRisk(data: Report) {
     const area = (cluster.areas[0] ? `<span class="area-tag ${cluster.areas[0].kind}">${cluster.areas[0].km === 0 ? 'Di dalam' : formatKm(cluster.areas[0].km)}</span><small>${escapeHtml(cluster.areas[0].name)}${cluster.areas.length > 1 ? ` +${cluster.areas.length - 1}` : ''}</small>` : '<small class="muted">—</small>') + peat
     const air = smoke ? `<span class="ispu-badge ${smoke.level.key}" style="--level:${smoke.level.color}">${smoke.level.label}</span><small>PM2.5 ${formatPm(smoke.pm25Mean24)} rata² 24j · puncak ${formatPm(smoke.pm25Max24)}</small>` : '<small class="muted">Tidak dianalisis</small>'
     const wind = smoke ? `<span class="wind"><i style="transform:rotate(${smoke.heading}deg)">↑</i>${smoke.windKmh.toFixed(0)} km/j ke ${compassLabel(smoke.heading)}</span><small>±${Math.round(smoke.reachKm)} km · ${numberFormat.format(smoke.settlements)} permukiman${smoke.towns.length ? ` (${smoke.towns.slice(0, 2).map((town) => escapeHtml(town.name)).join(', ')})` : ''}</small>` : '<small class="muted">—</small>'
-    return `<tr data-cluster="${index}"><td class="rank">${index + 1}</td><td class="cluster-cell"><strong>${cluster.nearest ? `Dekat ${escapeHtml(cluster.nearest.name)}` : formatPlace(cluster.lat, cluster.lon)}</strong><small>${cluster.nearest?.province ? `${escapeHtml(cluster.nearest.province)} · ` : ''}${formatPlace(cluster.lat, cluster.lon)}</small><small class="row-summary">${clusterSentence(cluster)}</small></td><td data-label="Titik · FRP"><strong>${numberFormat.format(cluster.count)}</strong><small>${numberFormat.format(Math.round(cluster.frp))} MW · ${cluster.high} tinggi</small></td><td data-label="Permukiman terdekat">${nearest}</td><td data-label="Kawasan">${area}</td><td data-label="Kualitas udara">${air}</td><td data-label="Angin · jangkauan asap">${wind}</td></tr>`
+    return `<tr data-cluster="${index}"><td class="rank">${index + 1}</td><td class="cluster-cell"><strong>${cluster.nearest ? `Dekat ${escapeHtml(cluster.nearest.name)}` : formatPlace(cluster.lat, cluster.lon)}</strong><small>${cluster.nearest?.province ? `${escapeHtml(cluster.nearest.province)} · ` : ''}${formatPlace(cluster.lat, cluster.lon)}</small><small class="row-summary">${clusterSentence(cluster)}</small></td><td data-label="Titik · FRP"><strong>${numberFormat.format(cluster.count)}</strong><small>${report?.frpAvailable === false ? '' : `${numberFormat.format(Math.round(cluster.frp))} MW · `}${cluster.high} tinggi</small></td><td data-label="Permukiman terdekat">${nearest}</td><td data-label="Kawasan">${area}</td><td data-label="Kualitas udara">${air}</td><td data-label="Angin · jangkauan asap">${wind}</td></tr>`
   }).join('') || '<tr><td colspan="7" class="empty-row">Tidak ada kluster.</td></tr>'
 
   smokeLayer.clearLayers()
@@ -447,7 +514,12 @@ function render(data: Report) {
   renderMap(data.fires)
   byId('active-count').textContent = numberFormat.format(summary.total)
   byId('high-count').textContent = numberFormat.format(summary.high)
-  byId('frp-total').textContent = numberFormat.format(summary.frp)
+  const official = data.source === 'BRIN_LAPAN'
+  byId('high-note').textContent = `Hampir pasti api, menurut ${official ? 'BRIN/LAPAN' : 'NASA'}`
+  byId('source-card-title').textContent = official ? 'SiPongi' : 'NASA FIRMS'
+  byId('source-card-note').textContent = official ? 'BRIN/LAPAN · Kemenhut' : 'Fire Information System'
+  byId('frp-total').textContent = data.frpAvailable ? numberFormat.format(summary.frp) : '—'
+  byId('frp-note').textContent = data.frpAvailable ? 'Makin besar, makin hebat api & asapnya' : 'Tidak tersedia pada data BRIN/LAPAN'
   byId('period-note').textContent = `${data.days === 1 ? '24 jam' : `${data.days} hari`} terakhir · ${sourceNames[data.source]}`
   byId('monitor-status').textContent = summary.total ? 'Feed aktif' : 'Tidak ada deteksi'
   byId('source-summary').textContent = summary.total ? `${numberFormat.format(summary.total)} rekaman satelit` : 'Tidak ada hotspot terdeteksi'
@@ -461,6 +533,7 @@ function render(data: Report) {
   renderRisk(data)
   renderStatus(data)
   renderTowns(data)
+  renderRegencies(data)
   void loadAreas()
 }
 
@@ -547,9 +620,9 @@ function syncControls() {
 
 function exportCsv() {
   if (!report?.fires.length) return
-  const headers = ['latitude', 'longitude', 'acq_date', 'acq_time', 'confidence', 'frp', 'daynight', 'permukiman_terdekat', 'jarak_permukiman_km', 'kawasan', 'jenis_kawasan', 'jarak_kawasan_km', 'khg_gambut']
+  const headers = ['latitude', 'longitude', 'acq_date', 'acq_time', 'confidence', 'frp', 'daynight', 'permukiman_terdekat', 'jarak_permukiman_km', 'kawasan', 'jenis_kawasan', 'jarak_kawasan_km', 'khg_gambut', 'kabupaten_kota']
   const escape = (value: unknown) => `"${String(value).replaceAll('"', '""')}"`
-  const lines = report.fires.map(([lat, lon, date, time, confidence, frp, daynight, settlementIndex, settlementKm, areaIndex, areaKm, peatIndex]) => [
+  const lines = report.fires.map(([lat, lon, date, time, confidence, frp, daynight, settlementIndex, settlementKm, areaIndex, areaKm, peatIndex, regencyIndex]) => [
     lat, lon, date, time, confidence, frp, daynight,
     settlementIndex >= 0 ? report!.settlementNames[settlementIndex] : '',
     settlementIndex >= 0 ? settlementKm : '',
@@ -557,6 +630,7 @@ function exportCsv() {
     areaIndex >= 0 ? report!.areas[areaIndex].kind : '',
     areaIndex >= 0 ? areaKm : '',
     peatIndex >= 0 ? report!.peatUnits[peatIndex] : '',
+    regencyIndex >= 0 ? report!.regencyNames[regencyIndex] : '',
   ].map(escape).join(','))
   const link = document.createElement('a')
   link.href = URL.createObjectURL(new Blob(['﻿', [headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' }))
@@ -726,9 +800,13 @@ navLinks.forEach((link) => link.addEventListener('click', () => {
 
 // Perbarui otomatis selama halaman terbuka; server sendiri menyegarkan cache tiap 10 menit.
 setInterval(() => {
-  if (document.visibilityState === 'visible') void refreshData()
+  if (document.visibilityState === 'visible') {
+    void refreshData()
+    void loadBnpb()
+  }
 }, AUTO_REFRESH_MS)
 
 new ResizeObserver(() => map.invalidateSize()).observe(byId('fire-map'))
 syncControls()
 void refreshData()
+void loadBnpb()

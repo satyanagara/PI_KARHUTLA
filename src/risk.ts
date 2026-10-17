@@ -3,7 +3,7 @@
 export type Fire = Record<string, string>
 
 export type Settlement = { name: string; lat: number; lon: number; rank: number; population: number; province: string }
-export type AreaKind = 'konservasi' | 'lindung' | 'gambut'
+export type AreaKind = 'konservasi' | 'lindung' | 'gambut' | 'kabupaten' | 'provinsi'
 export type AreaHit = { name: string; kind: AreaKind; km: number }
 
 export type FireRisk = {

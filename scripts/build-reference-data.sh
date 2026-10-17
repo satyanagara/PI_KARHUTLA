@@ -3,6 +3,7 @@
 #   settlements.txt                      permukiman Indonesia dari GeoNames (CC BY 4.0)
 #   kawasan-hutan.json / -web.json       kawasan konservasi & hutan lindung, IGT Kawasan Hutan 1:250.000
 #   gambut.json / gambut-web.json        Kesatuan Hidrologis Gambut (KHG) 1:250.000
+#   provinsi.json / kabupaten.json       batas wilayah (SiPongi, Kementerian Kehutanan); provinsi = penyaring wilayah RI
 # Kawasan hutan dan KHG bersumber dari SIGAP Kementerian Kehutanan (Ditjen Planologi Kehutanan).
 # Butuh: curl, unzip, python3, npx (mapshaper diunduh otomatis). Unduhan SIGAP ±860 MB.
 set -euo pipefail
@@ -43,6 +44,12 @@ python3 -I "$ROOT/scripts/normalize_klhk.py" gambut "$WORK/gambut.geojson" "$WOR
   NODE_OPTIONS=--max-old-space-size=8192 $MAPSHAPER kawasan-norm.geojson -simplify interval=400 keep-shapes -filter-slivers min-area=0.05km2 -o kawasan-web.json format=geojson precision=0.001 && \
   $MAPSHAPER gambut-norm.geojson -dissolve2 c copy-fields=n,k -simplify interval=120 keep-shapes -clean -o gambut-server.json format=geojson precision=0.0001 && \
   $MAPSHAPER gambut-norm.geojson -dissolve2 c copy-fields=n,k -simplify interval=600 keep-shapes -clean -o gambut-web.json format=geojson precision=0.001)
+
+echo "Mengunduh batas provinsi dan kabupaten/kota dari SiPongi..."
+for LEVEL in provinsi kabupaten; do
+  curl -sSf --compressed --max-time 300 -A "$UA" -o "$WORK/$LEVEL.geojson" "https://opsroom-sipongi.gakkum.kehutanan.go.id/api/boundaries?level=$LEVEL"
+  python3 -I "$ROOT/scripts/normalize_wilayah.py" "$LEVEL" "$WORK/$LEVEL.geojson" "$OUT/$LEVEL.json"
+done
 
 # Buang fitur yang geometrinya hilang karena terlalu kecil setelah penyederhanaan.
 drop_empty() {

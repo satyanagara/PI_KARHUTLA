@@ -7,6 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib'
 import { DAY_OPTIONS, SOURCES, type Source } from '../src/report-types.ts'
+import { getBnpbReport } from './bnpb.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -204,6 +205,15 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/api/hotspots') return allowed(req, res) && (await handleHotspots(req, res, url))
     if (url.pathname === '/api/lokasi') return allowed(req, res) && (await handleLocation(req, res, url))
+    if (url.pathname === '/api/laporan-bnpb') {
+      if (!allowed(req, res)) return
+      try {
+        return sendJson(req, res, await getBnpbReport(), 'public, max-age=300')
+      } catch (error) {
+        console.error('[bnpb]', error)
+        return sendError(res, 502, 'Laporan BNPB sedang tidak tersedia.')
+      }
+    }
     if (url.pathname === '/api/cari') {
       if (!allowed(req, res)) return
       const query = (url.searchParams.get('q') ?? '').slice(0, 60)
@@ -220,6 +230,6 @@ const server = createServer(async (req, res) => {
 })
 
 const counts = await loadReference(DATA)
-console.log(`[server] data rujukan: ${counts.settlements} permukiman, ${counts.areas} poligon kawasan hutan, ${counts.peat} KHG`)
+console.log(`[server] data rujukan: ${counts.settlements} permukiman, ${counts.areas} poligon kawasan hutan, ${counts.peat} KHG, ${counts.regencies} kabupaten/kota`)
 if (!process.env.FIRMS_MAP_KEY) console.warn('[server] PERINGATAN: FIRMS_MAP_KEY belum diatur, /api/hotspots akan gagal.')
 server.listen(PORT, HOST, () => console.log(`[server] berjalan di http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))

@@ -801,6 +801,106 @@ h1 span {
   align-self: flex-start;
 }
 
+/* ---------- Laporan BNPB & kabupaten ---------- */
+
+.bnpb-section {
+  scroll-margin-top: 80px;
+}
+
+.bnpb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.bnpb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--level);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.bnpb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bnpb-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.bnpb-head .ispu-badge {
+  --level: inherit;
+}
+
+.bnpb-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.bnpb-stats dt {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+
+.bnpb-stats dd {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bnpb-card details {
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.bnpb-card summary {
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.bnpb-card details p {
+  margin-top: 8px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.regency-panel {
+  margin-bottom: 14px;
+}
+
+.regency-table td {
+  vertical-align: top;
+}
+
+.regency-table td:not(:first-child),
+.regency-table th:not(:first-child) {
+  text-align: right;
+}
+
+.regency-table td small {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
 /* ---------- Statistik ---------- */
 
 .stats-grid {
@@ -2355,6 +2455,11 @@ tbody tr:hover td {
 
   .detections-panel table {
     font-size: 11.5px;
+  }
+
+  .regency-table th:nth-child(n + 3),
+  .regency-table td:nth-child(n + 3) {
+    display: none;
   }
 
   .app-footer {

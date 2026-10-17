@@ -15,7 +15,7 @@ PORT_APP="${PORT_APP:-8787}"
 get() { awk -v s="[target]" -v k="$1" '$0==s{f=1;next} /^\[/{f=0} f && $1==k {sub(/^[^=]*=[ \t]*/,""); print; exit}' "$CFG"; }
 HOST=$(get host); USER_=$(get user); PORT=$(get port); PORT=${PORT:-22}
 export SSHPASS="$(get password)"
-SSH_OPTS="-p $PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o PubkeyAuthentication=no"
+SSH_OPTS="-p $PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=60 -o ServerAliveInterval=15 -o PubkeyAuthentication=no"
 remote() { sshpass -e ssh $SSH_OPTS "$USER_@$HOST" "$@"; }
 
 KEY=$(sed -n 's/^FIRMS_MAP_KEY=//p' "$ROOT/.env.local")
@@ -35,7 +35,7 @@ echo "==> Build image dan jalankan container"
 remote "cd $REMOTE_DIR && docker build -q -t $APP:latest -f Containerfile . && \
   (docker rm -f $APP >/dev/null 2>&1 || true) && \
   docker run -d --name $APP --restart unless-stopped \
-    -p $PORT_APP:8787 --env-file .env --memory 768m \
+    -p $PORT_APP:8787 --env-file .env --memory 768m -v $APP-cache:/app/.cache \
     --health-cmd 'wget -qO- http://127.0.0.1:8787/api/health || exit 1' --health-interval 30s \
     $APP:latest >/dev/null && \
   docker image prune -f >/dev/null && \

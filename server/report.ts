@@ -28,23 +28,27 @@ const SMOKE_CLUSTERS = 30
 const PRIORITY_CLUSTERS = 30
 const FIRMS_AREA = '94,-11,142,6'
 
-type Reference = { settlements: SettlementIndex; areas: AreaIndex; peat: AreaIndex }
+type Reference = { settlements: SettlementIndex; areas: AreaIndex; peat: AreaIndex; regencies: AreaIndex; provinces: AreaIndex; regencyProvince: Map<string, string> }
 let reference: Reference | null = null
 
 // Permukiman: GeoNames. Kawasan hutan (konservasi & lindung) dan KHG gambut: Kementerian Kehutanan (SIGAP).
 export async function loadReference(dataDir: string) {
+  const regencyProvince = new Map<string, string>()
   const readGeojson = async (name: string) => {
     const geojson = JSON.parse(await readFile(path.join(dataDir, name), 'utf8'))
     geojson.features = geojson.features.filter((feature: { geometry: unknown }) => feature.geometry)
+    for (const feature of geojson.features) if (feature.properties.p) regencyProvince.set(feature.properties.n, feature.properties.p)
     return AreaIndex.parse(geojson)
   }
-  const [settlementText, areas, peat] = await Promise.all([
+  const [settlementText, areas, peat, regencies, provinces] = await Promise.all([
     readFile(path.join(dataDir, 'settlements.txt'), 'utf8'),
     readGeojson('kawasan-hutan.json'),
     readGeojson('gambut.json'),
+    readGeojson('kabupaten.json'),
+    readGeojson('provinsi.json'),
   ])
-  reference = { settlements: SettlementIndex.parse(settlementText), areas, peat }
-  return { settlements: reference.settlements.items.length, areas: areas.areas.length, peat: peat.areas.length }
+  reference = { settlements: SettlementIndex.parse(settlementText), areas, peat, regencies, provinces, regencyProvince }
+  return { settlements: reference.settlements.items.length, areas: areas.areas.length, peat: peat.areas.length, regencies: regencies.areas.length }
 }
 
 // ---------- NASA FIRMS ----------
@@ -69,6 +73,33 @@ async function fetchFirms(source: Source, days: number) {
   const body = await response.text()
   if (!response.ok) throw new Error(`FIRMS (${response.status}): ${body.slice(0, 200)}`)
   return parseCsv(body)
+}
+
+// ---------- SiPongi (BRIN/LAPAN) ----------
+
+const SIPONGI_UA = 'Mozilla/5.0 (compatible; PemantauKarhutla/1.0; +https://amukapi.santaralabs.ai)'
+
+// Hotspot resmi pemerintah dari SiPongi. Hanya keyakinan sedang dan tinggi, sesuai praktik pelaporan Kemenhut.
+async function fetchSipongi(days: number): Promise<Fire[]> {
+  const url = `https://opsroom.sipongidata.my.id/api/opsroom/indoHotspot?wilayah=IN&filterperiode=false&from=&to=&late=${days * 24}`
+    + '&satelit%5B%5D=LPN-NPP&satelit%5B%5D=LPN-NOAA20&confidence%5B%5D=medium&confidence%5B%5D=high'
+  const response = await fetch(url, { headers: { 'User-Agent': SIPONGI_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(60000) })
+  if (!response.ok) throw new Error(`SiPongi (${response.status})`)
+  const body = await response.json() as { features: { properties: Record<string, string | number> }[] }
+  return body.features.map(({ properties }) => {
+    const at = new Date(String(properties.date_hotspot_ori))
+    const iso = at.toISOString()
+    return {
+      latitude: String(properties.lat),
+      longitude: String(properties.long),
+      acq_date: iso.slice(0, 10),
+      acq_time: iso.slice(11, 13) + iso.slice(14, 16),
+      confidence: properties.confidence_level === 'high' ? 'h' : properties.confidence_level === 'low' ? 'l' : 'n',
+      frp: '',
+      daynight: '',
+      satellite: String(properties.ori_sumber ?? ''),
+    }
+  })
 }
 
 // ---------- Open-Meteo ----------
@@ -136,12 +167,13 @@ const round = (value: number, digits: number) => Math.round(value * 10 ** digits
 
 async function buildReport(source: Source, days: number): Promise<Report> {
   if (!reference) throw new Error('Data rujukan belum dimuat.')
-  const { settlements, areas, peat } = reference
+  const { settlements, areas, peat, regencies, provinces, regencyProvince } = reference
+  const official = source === 'BRIN_LAPAN'
   // FIRMS day_range=1 hanya berisi tanggal UTC hari ini, jadi 24 jam diambil dari 2 hari lalu disaring.
-  const raw = await fetchFirms(source, days === 1 ? 2 : days)
+  const raw = official ? await fetchSipongi(days) : await fetchFirms(source, days === 1 ? 2 : days)
   const fetchedAt = new Date()
   const cutoff = fetchedAt.getTime() - 24 * 3600 * 1000
-  const rows = days === 1 ? raw.filter((fire) => {
+  const rows = days === 1 && !official ? raw.filter((fire) => {
     const time = String(fire.acq_time ?? '').padStart(4, '0')
     return Date.parse(`${fire.acq_date}T${time.slice(0, 2)}:${time.slice(2)}:00Z`) >= cutoff
   }) : raw
@@ -152,6 +184,9 @@ async function buildReport(source: Source, days: number): Promise<Report> {
   const areaIndex = new Map<string, number>()
   const peatUnits: string[] = []
   const peatIndex = new Map<string, number>()
+  const regencyNames: string[] = []
+  const regencyIndex = new Map<string, number>()
+  const regencyStats = new Map<string, { total: number; high: number; nearSettlement: number; peat: number; forest: number }>()
   const intern = <T>(map: Map<string, number>, list: T[], key: string, value: T) => {
     let index = map.get(key)
     if (index === undefined) {
@@ -175,6 +210,8 @@ async function buildReport(source: Source, days: number): Promise<Report> {
     const lat = Number(fire.latitude)
     const lon = Number(fire.longitude)
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
+    // Kotak area FIRMS juga mencakup Papua Nugini, Timor-Leste, dan Malaysia; hanya wilayah RI yang dianalisis.
+    if (!provinces.locate(lat, lon, 2)) continue
     const frp = Number(fire.frp) || 0
     const isHigh = confidenceOf(fire.confidence ?? '') === 'high'
     const risk: FireRisk = assessFire(lat, lon, settlements, areas, peat)
@@ -187,7 +224,17 @@ async function buildReport(source: Source, days: number): Promise<Report> {
       villages.add(`${risk.settlement.name}|${risk.settlement.lat}|${risk.settlement.lon}`)
     }
     if (risk.peat) peatInside++
-    if (risk.area && risk.area.kind !== 'gambut') {
+    const regency = regencies.locate(lat, lon, 0)?.name ?? null
+    if (regency) {
+      const stats = regencyStats.get(regency) ?? { total: 0, high: 0, nearSettlement: 0, peat: 0, forest: 0 }
+      stats.total++
+      if (isHigh) stats.high++
+      if (risk.settlementKm <= SETTLEMENT_ALERT_KM) stats.nearSettlement++
+      if (risk.peat) stats.peat++
+      if (risk.area?.km === 0) stats.forest++
+      regencyStats.set(regency, stats)
+    }
+    if (risk.area && (risk.area.kind === 'konservasi' || risk.area.kind === 'lindung')) {
       const bucket = kinds[risk.area.kind]
       if (risk.area.km === 0) {
         bucket.inside++
@@ -214,6 +261,7 @@ async function buildReport(source: Source, days: number): Promise<Report> {
       risk.area ? intern(areaIndex, areaList, risk.area.name, { name: risk.area.name, kind: risk.area.kind }) : -1,
       risk.area ? round(risk.area.km, 2) : -1,
       risk.peat ? intern(peatIndex, peatUnits, risk.peat, risk.peat) : -1,
+      regency ? intern(regencyIndex, regencyNames, regency, regency) : -1,
     ])
     assessed.push({ lat, lon, fire, risk, high: isHigh, time: `${fire.acq_date} ${time.slice(0, 2)}:${time.slice(2)}` })
   }
@@ -262,7 +310,13 @@ async function buildReport(source: Source, days: number): Promise<Report> {
     settlementNames,
     areas: areaList,
     peatUnits,
+    regencyNames,
     fires,
+    frpAvailable: !official,
+    regencies: [...regencyStats.entries()]
+      .map(([name, stats]) => ({ name, province: regencyProvince.get(name) ?? '', ...stats }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 20),
     summary: {
       total: fires.length,
       high,
