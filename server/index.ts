@@ -2,6 +2,8 @@
 // Jalankan dengan Node 22.18+ (type stripping bawaan): node --env-file-if-exists=.env.local server/index.ts
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createHash } from 'node:crypto'
+import dns from 'node:dns'
+import net from 'node:net'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,6 +11,11 @@ import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib'
 import { DAY_OPTIONS, SOURCES, type Source } from '../src/report-types.ts'
 import { getBnpbReport } from './bnpb.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
+
+// Server tanpa IPv6: dahulukan IPv4 dan beri waktu cukup per percobaan koneksi. Batas bawaan Node (250 ms)
+// lebih pendek dari latensi ke NASA FIRMS di AS, sehingga fetch kadang gagal ETIMEDOUT.
+dns.setDefaultResultOrder('ipv4first')
+net.setDefaultAutoSelectFamilyAttemptTimeout(2500)
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = path.join(ROOT, 'dist')

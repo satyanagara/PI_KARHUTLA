@@ -15,10 +15,10 @@ HOST=$(get host); USER_=$(get user); PORT=$(get port); PORT=${PORT:-22}
 export SSHPASS="$(get password)"
 SSH_OPTS="-p $PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=60 -o PubkeyAuthentication=no"
 
-# Periksa langsung di nameserver otoritatif (resolver publik bisa masih menyimpan nilai lama).
-for NS in $(dig +short NS "${DOMAIN#*.}"); do
-  RESOLVED=$(dig +short @"$NS" "$DOMAIN" A | tail -1)
-  [ "$RESOLVED" = "$PUBLIC_IP" ] || { echo "DNS $DOMAIN di $NS = '${RESOLVED:-kosong}', seharusnya $PUBLIC_IP."; exit 1; }
+# Periksa lewat DNS-over-HTTPS: sebagian ISP mencegat kueri DNS port 53 sehingga dig bisa menipu.
+for DOH in "https://dns.google/resolve" "https://cloudflare-dns.com/dns-query"; do
+  RESOLVED=$(curl -s -H "accept: application/dns-json" "$DOH?name=$DOMAIN&type=A" | python3 -I -c 'import json,sys; print(" ".join(a["data"] for a in json.load(sys.stdin).get("Answer", [])))')
+  [ "$RESOLVED" = "$PUBLIC_IP" ] || { echo "DNS $DOMAIN menurut $DOH = '${RESOLVED:-kosong}', seharusnya $PUBLIC_IP."; exit 1; }
 done
 
 echo "==> Mengunggah konfigurasi HTTPS"
