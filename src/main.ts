@@ -2,7 +2,7 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, levelRank, type Cluster, type IspuLevel } from './risk.ts'
-import { DAY_OPTIONS, SOURCES, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
+import { DAY_OPTIONS, FLAG_STATIONARY, SOURCES, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
 const sourceNames: Record<Source, string> = {
   VIIRS_NOAA21_NRT: 'NOAA-21 · VIIRS 375 m',
@@ -131,7 +131,7 @@ app.innerHTML = `
             <div id="fire-map" role="img" aria-label="Peta Indonesia dengan titik panas terdeteksi"></div>
             <div class="map-overline"><span class="map-crosshair">⌖</span> WILAYAH PEMANTAUAN <b>INDONESIA</b></div>
             <div class="map-layers" aria-label="Lapisan peta"><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-areas" checked /> Kawasan hutan</label><label><input type="checkbox" id="layer-peat" /> Lahan gambut (KHG)</label></div>
-            <div class="map-legend"><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span></div>
+            <div class="map-legend"><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
             <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
             <div class="map-credit">Peta dasar © Esri, HERE, Garmin · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
           </div>
@@ -211,6 +211,7 @@ app.innerHTML = `
             <div><h3>Laporan lapangan</h3><p>Firespot, luas lahan terbakar, jarak pandang bandara, dan kesimpulan Satgas berasal dari <a href="https://data.bnpb.go.id/data/karhutla2026" target="_blank" rel="noreferrer">Dashboard Karhutla BNPB</a>, diperbarui setiap 15 menit.</p></div>
             <div><h3>Kedekatan</h3><p>Jarak tiap titik ke permukiman terdekat (<a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames</a>, ±257 ribu desa/kota) dan ke batas kawasan konservasi atau hutan lindung menurut peta resmi Kawasan Hutan 1:250.000 status Juni 2026, serta apakah titik berada di Kesatuan Hidrologis Gambut. Keduanya dari <a href="https://sigap.kehutanan.go.id/" target="_blank" rel="noreferrer">SIGAP Kementerian Kehutanan</a>.</p></div>
             <div><h3>Asap &amp; ISPU</h3><p>Titik dikelompokkan per ±20 km. Untuk 30 kluster teratas, angin dan PM2.5 diambil dari <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (model CAMS). Kategori mengikuti ISPU PM2.5 rata-rata 24 jam (PermenLHK P.14/2020). Jalur asap adalah kerucut 6 jam searah angin.</p></div>
+            <div><h3>Sumber panas tetap</h3><p>Titik yang terdeteksi pada ≥3 hari berbeda dalam 5 hari terakhir di tempat yang sama (±440 m) dan dekat permukiman ditandai abu-abu sebagai kemungkinan pabrik, pembangkit, atau pembakaran berulang, lalu tidak dihitung dalam analisis risiko. Titik tetap tampil di peta dan CSV. Titik di lahan gambut atau kawasan hutan tidak pernah ditandai.</p></div>
             <div><h3>Istilah</h3><p><b>Titik panas</b>: lokasi yang jauh lebih panas dari sekitarnya menurut satelit, umumnya api. <b>FRP</b>: kekuatan api dalam megawatt. <b>PM2.5</b>: partikel asap halus yang masuk ke paru-paru. <b>ISPU</b>: Indeks Standar Pencemar Udara. <b>KHG</b>: Kesatuan Hidrologis Gambut.</p></div>
             <div><h3>Batasan</h3><p>Hotspot bukan konfirmasi kebakaran, kualitas udara berasal dari model, dan batas kawasan dapat berbeda dari kondisi lapangan. Gunakan sebagai peringatan dini, bukan pengganti verifikasi lapangan.</p></div>
           </div>
@@ -318,6 +319,7 @@ function renderStatus(data: Report) {
     points.push(`<b>${numberFormat.format(summary.total)}</b> titik panas terpantau satelit; <b>${numberFormat.format(summary.nearSettlement)}</b> di antaranya kurang dari ${SETTLEMENT_ALERT_KM} km dari permukiman warga.`)
     const unhealthy = data.exposedTowns.filter((town) => UNHEALTHY_LEVELS.includes(town.level.key))
     if (unhealthy.length) points.push(`<b>${unhealthy.length}</b> kota/kecamatan diperkirakan dilalui asap tidak sehat, antara lain ${unhealthy.slice(0, 4).map((town) => `<b>${escapeHtml(town.name)}</b>`).join(', ')}.`)
+    if (summary.stationary) points.push(`<b>${numberFormat.format(summary.stationary)}</b> titik lain tidak dihitung karena terdeteksi berulang di tempat yang sama, kemungkinan pabrik, pembangkit, atau pembakaran berulang.`)
     const forest = summary.konservasi.inside + summary.lindung.inside
     if (forest || summary.peat.inside) points.push(`<b>${numberFormat.format(forest)}</b> titik berada di kawasan konservasi atau hutan lindung, dan <b>${numberFormat.format(summary.peat.inside)}</b> di lahan gambut yang menghasilkan asap pekat.`)
   }
@@ -473,9 +475,11 @@ function setError(message: string) {
 // ---------- Render ----------
 
 function firePopup(fire: ReportFire) {
-  const [lat, lon, date, time, confidence, frp, , settlementIndex, settlementKm, areaIndex, areaKm, peatIndex, regencyIndex] = fire
+  const [lat, lon, date, time, confidence, frp, , settlementIndex, settlementKm, areaIndex, areaKm, peatIndex, regencyIndex, flag] = fire
   const lines = [
-    '<strong>Titik panas (kemungkinan api)</strong>',
+    flag === FLAG_STATIONARY
+      ? '<strong>Kemungkinan sumber panas tetap</strong><br><small>Terdeteksi berulang di tempat yang sama dekat permukiman: kemungkinan pabrik, pembangkit, atau pembakaran berulang. Tidak dihitung dalam analisis risiko.</small>'
+      : '<strong>Titik panas (kemungkinan api)</strong>',
     `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
     `Keyakinan: ${({ high: 'tinggi', medium: 'sedang', low: 'rendah' } as const)[confidenceOf(confidence)]}${report?.frpAvailable === false ? '' : ` · kekuatan ${frp.toFixed(1)} MW`}`,
     `${escapeHtml(date)} ${escapeHtml(time.slice(0, 2))}:${escapeHtml(time.slice(2))} UTC${regencyIndex >= 0 ? ` · ${escapeHtml(report!.regencyNames[regencyIndex])}` : ''}`,
@@ -493,6 +497,11 @@ function renderMap(fires: ReportFire[]) {
   const colors: Record<Confidence, string> = { high: '#df593c', medium: '#df9b35', low: '#5e9d78' }
   const ordered = fires.map((fire) => ({ fire, confidence: confidenceOf(fire[4]) })).sort((a, b) => drawOrder[a.confidence] - drawOrder[b.confidence])
   for (const { fire, confidence } of ordered) {
+    if (fire[13] === FLAG_STATIONARY) {
+      L.circleMarker([fire[0], fire[1]], { radius: 3.5, color: '#6b7280', weight: 1.5, opacity: 0.9, fillColor: '#ffffff', fillOpacity: 0.9 })
+        .bindPopup(() => firePopup(fire)).addTo(fireLayer)
+      continue
+    }
     L.circleMarker([fire[0], fire[1]], {
       radius: confidence === 'high' ? 4.5 : 3.2,
       color: colors[confidence],
@@ -678,9 +687,9 @@ function syncControls() {
 
 function exportCsv() {
   if (!report?.fires.length) return
-  const headers = ['latitude', 'longitude', 'acq_date', 'acq_time', 'confidence', 'frp', 'daynight', 'permukiman_terdekat', 'jarak_permukiman_km', 'kawasan', 'jenis_kawasan', 'jarak_kawasan_km', 'khg_gambut', 'kabupaten_kota']
+  const headers = ['latitude', 'longitude', 'acq_date', 'acq_time', 'confidence', 'frp', 'daynight', 'permukiman_terdekat', 'jarak_permukiman_km', 'kawasan', 'jenis_kawasan', 'jarak_kawasan_km', 'khg_gambut', 'kabupaten_kota', 'kemungkinan_sumber_panas_tetap']
   const escape = (value: unknown) => `"${String(value).replaceAll('"', '""')}"`
-  const lines = report.fires.map(([lat, lon, date, time, confidence, frp, daynight, settlementIndex, settlementKm, areaIndex, areaKm, peatIndex, regencyIndex]) => [
+  const lines = report.fires.map(([lat, lon, date, time, confidence, frp, daynight, settlementIndex, settlementKm, areaIndex, areaKm, peatIndex, regencyIndex, flag]) => [
     lat, lon, date, time, confidence, frp, daynight,
     settlementIndex >= 0 ? report!.settlementNames[settlementIndex] : '',
     settlementIndex >= 0 ? settlementKm : '',
@@ -689,6 +698,7 @@ function exportCsv() {
     areaIndex >= 0 ? areaKm : '',
     peatIndex >= 0 ? report!.peatUnits[peatIndex] : '',
     regencyIndex >= 0 ? report!.regencyNames[regencyIndex] : '',
+    flag === FLAG_STATIONARY ? 'ya' : '',
   ].map(escape).join(','))
   const link = document.createElement('a')
   link.href = URL.createObjectURL(new Blob(['﻿', [headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' }))
@@ -725,11 +735,13 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
   const lines: string[] = []
   if (fire && fire.km <= 25) {
     const urgency = fire.km <= SETTLEMENT_ALERT_KM ? ' <b>Sangat dekat — waspadai api dan ikuti arahan BPBD.</b>' : ''
-    lines.push(`Titik api terdekat <b>${formatKm(fire.km)}</b> di arah ${fire.direction}${fire.settlement ? ` (dekat ${escapeHtml(fire.settlement)})` : ''}.${urgency}`)
+    const certainty = { high: 'keyakinan satelit tinggi', medium: 'keyakinan satelit sedang', low: 'keyakinan satelit rendah, bisa jadi bukan api' }[confidenceOf(fire.confidence)]
+    lines.push(`Titik api terdekat <b>${formatKm(fire.km)}</b> di arah ${fire.direction}${fire.settlement ? ` (dekat ${escapeHtml(fire.settlement)})` : ''}, ${certainty}.${urgency}`)
     lines.push(`${numberFormat.format(result.counts.km5)} titik dalam 5 km · ${numberFormat.format(result.counts.km10)} dalam 10 km · ${numberFormat.format(result.counts.km25)} dalam 25 km (${period}).`)
   } else {
     lines.push(`Tidak ada titik api dalam radius 25 km selama ${period}${fire ? `; yang terdekat ${formatKm(fire.km)} di arah ${fire.direction}` : ''}.`)
   }
+  if (result.stationary) lines.push(`Ada sumber panas tetap ${formatKm(result.stationary.km)} di arah ${result.stationary.direction}${result.stationary.settlement ? ` (dekat ${escapeHtml(result.stationary.settlement)})` : ''}. Titik ini terdeteksi berulang di tempat yang sama (kemungkinan pabrik, pembangkit, atau pembakaran berulang), sehingga tidak dihitung dalam analisis risiko.`)
   const plume = result.smoke[0]
   if (plume) lines.push(`Lokasi ini <b>berada di jalur asap</b> dari wilayah api ${formatKm(plume.fireKm)} di arah ${plume.fireDirection}${plume.place ? ` (dekat ${escapeHtml(plume.place)})` : ''}.`)
   else lines.push('Lokasi ini tidak berada di jalur asap wilayah api utama yang dianalisis.')

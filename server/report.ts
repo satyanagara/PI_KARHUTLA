@@ -20,7 +20,7 @@ import {
   type FireRisk,
   type SmokeReading,
 } from '../src/risk.ts'
-import type { AreaRank, ExposedTown, LocationCheck, Report, ReportFire, Source } from '../src/report-types.ts'
+import { FLAG_STATIONARY, type AreaRank, type ExposedTown, type LocationCheck, type Report, type ReportFire, type Source } from '../src/report-types.ts'
 
 const REPORT_TTL_MS = 10 * 60 * 1000
 const SMOKE_TTL_MS = 30 * 60 * 1000
@@ -165,6 +165,56 @@ const confidenceOf = (raw: string) => {
 }
 const round = (value: number, digits: number) => Math.round(value * 10 ** digits) / 10 ** digits
 
+// ---------- Sumber panas tetap ----------
+// Pabrik, pembangkit, atau pembakaran rutin muncul di titik yang sama hampir setiap hari, sedangkan kebakaran
+// lahan biasanya berpindah atau padam. Riwayat 5 hari (gabungan ketiga satelit VIIRS untuk data NASA, karena
+// tiap satelit bisa melihat sumber yang sama di hari berbeda) dipetakan ke sel ±440 m; titik ditandai bila sel
+// itu dan tetangganya terdeteksi pada ≥3 tanggal berbeda. Titik di gambut atau di dalam kawasan hutan tidak pernah
+// ditandai, karena api gambut memang dapat bertahan berhari-hari di tempat yang sama.
+const PERSIST_CELL = 0.004
+const PERSIST_MIN_DAYS = 3
+const HISTORY_TTL_MS = 30 * 60 * 1000
+type History = Map<string, Set<string>>
+const histories = new Map<'NASA' | 'BRIN_LAPAN', { at: number; history: Promise<History> }>()
+const NASA_SOURCES: Source[] = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT']
+
+function buildHistory(rows: Fire[]): History {
+  const history: History = new Map()
+  for (const fire of rows) {
+    const lat = Number(fire.latitude)
+    const lon = Number(fire.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !fire.acq_date) continue
+    const key = `${Math.floor(lat / PERSIST_CELL)}:${Math.floor(lon / PERSIST_CELL)}`
+    const dates = history.get(key) ?? new Set<string>()
+    dates.add(fire.acq_date)
+    history.set(key, dates)
+  }
+  return history
+}
+
+function loadHistory(source: Source): Promise<History> {
+  const key = source === 'BRIN_LAPAN' ? 'BRIN_LAPAN' : 'NASA'
+  const hit = histories.get(key)
+  if (hit && Date.now() - hit.at < HISTORY_TTL_MS) return hit.history
+  const history = (key === 'BRIN_LAPAN'
+    ? fetchSipongi(5)
+    : Promise.all(NASA_SOURCES.map((item) => fetchFirms(item, 5))).then((sets) => sets.flat())
+  ).then(buildHistory)
+  histories.set(key, { at: Date.now(), history })
+  history.catch(() => histories.delete(key))
+  return history
+}
+
+function persistentDays(history: History, lat: number, lon: number) {
+  const row = Math.floor(lat / PERSIST_CELL)
+  const col = Math.floor(lon / PERSIST_CELL)
+  const dates = new Set<string>()
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) history.get(`${row + dr}:${col + dc}`)?.forEach((date) => dates.add(date))
+  }
+  return dates.size
+}
+
 async function buildReport(source: Source, days: number): Promise<Report> {
   if (!reference) throw new Error('Data rujukan belum dimuat.')
   const { settlements, areas, peat, regencies, provinces, regencyProvince } = reference
@@ -177,6 +227,12 @@ async function buildReport(source: Source, days: number): Promise<Report> {
     const time = String(fire.acq_time ?? '').padStart(4, '0')
     return Date.parse(`${fire.acq_date}T${time.slice(0, 2)}:${time.slice(2)}:00Z`) >= cutoff
   }) : raw
+  let history: History | null = null
+  try {
+    history = await loadHistory(source)
+  } catch (error) {
+    console.error('[report] riwayat 5 hari gagal dimuat, penanda sumber panas tetap dilewati:', error instanceof Error ? error.message : error)
+  }
 
   const settlementNames: string[] = []
   const settlementIndex = new Map<string, number>()
@@ -204,6 +260,7 @@ async function buildReport(source: Source, days: number): Promise<Report> {
   let totalFrp = 0
   let nearSettlement = 0
   let peatInside = 0
+  let stationary = 0
   const kinds = { konservasi: { inside: 0, nearEdge: 0, names: new Set<string>() }, lindung: { inside: 0, nearEdge: 0, names: new Set<string>() } }
 
   for (const fire of rows) {
@@ -216,6 +273,34 @@ async function buildReport(source: Source, days: number): Promise<Report> {
     const isHigh = confidenceOf(fire.confidence ?? '') === 'high'
     const risk: FireRisk = assessFire(lat, lon, settlements, areas, peat)
     const time = String(fire.acq_time ?? '').padStart(4, '0')
+    const regency = regencies.locate(lat, lon, 0)?.name ?? null
+    const isStationary = Boolean(history)
+      && !risk.peat
+      && risk.area?.km !== 0
+      && risk.settlementKm <= SETTLEMENT_ALERT_KM
+      && persistentDays(history!, lat, lon) >= PERSIST_MIN_DAYS
+    const record: ReportFire = [
+      round(lat, 5),
+      round(lon, 5),
+      fire.acq_date ?? '',
+      time,
+      fire.confidence ?? '',
+      round(frp, 2),
+      fire.daynight ?? '',
+      risk.settlement ? intern(settlementIndex, settlementNames, risk.settlement.name, risk.settlement.name) : -1,
+      risk.settlement ? round(risk.settlementKm, 2) : -1,
+      risk.area ? intern(areaIndex, areaList, risk.area.name, { name: risk.area.name, kind: risk.area.kind }) : -1,
+      risk.area ? round(risk.area.km, 2) : -1,
+      risk.peat ? intern(peatIndex, peatUnits, risk.peat, risk.peat) : -1,
+      regency ? intern(regencyIndex, regencyNames, regency, regency) : -1,
+      isStationary ? FLAG_STATIONARY : 0,
+    ]
+    fires.push(record)
+    // Sumber panas tetap tetap tampil di peta dan CSV, tetapi tidak masuk analisis risiko.
+    if (isStationary) {
+      stationary++
+      continue
+    }
 
     if (isHigh) high++
     totalFrp += frp
@@ -224,7 +309,6 @@ async function buildReport(source: Source, days: number): Promise<Report> {
       villages.add(`${risk.settlement.name}|${risk.settlement.lat}|${risk.settlement.lon}`)
     }
     if (risk.peat) peatInside++
-    const regency = regencies.locate(lat, lon, 0)?.name ?? null
     if (regency) {
       const stats = regencyStats.get(regency) ?? { total: 0, high: 0, nearSettlement: 0, peat: 0, forest: 0 }
       stats.total++
@@ -248,21 +332,6 @@ async function buildReport(source: Source, days: number): Promise<Report> {
       ranking.set(risk.area.name, entry)
     }
 
-    fires.push([
-      round(lat, 5),
-      round(lon, 5),
-      fire.acq_date ?? '',
-      time,
-      fire.confidence ?? '',
-      round(frp, 2),
-      fire.daynight ?? '',
-      risk.settlement ? intern(settlementIndex, settlementNames, risk.settlement.name, risk.settlement.name) : -1,
-      risk.settlement ? round(risk.settlementKm, 2) : -1,
-      risk.area ? intern(areaIndex, areaList, risk.area.name, { name: risk.area.name, kind: risk.area.kind }) : -1,
-      risk.area ? round(risk.area.km, 2) : -1,
-      risk.peat ? intern(peatIndex, peatUnits, risk.peat, risk.peat) : -1,
-      regency ? intern(regencyIndex, regencyNames, regency, regency) : -1,
-    ])
     assessed.push({ lat, lon, fire, risk, high: isHigh, time: `${fire.acq_date} ${time.slice(0, 2)}:${time.slice(2)}` })
   }
 
@@ -326,6 +395,7 @@ async function buildReport(source: Source, days: number): Promise<Report> {
       konservasi: { inside: kinds.konservasi.inside, areas: kinds.konservasi.names.size, nearEdge: kinds.konservasi.nearEdge },
       lindung: { inside: kinds.lindung.inside, areas: kinds.lindung.names.size, nearEdge: kinds.lindung.nearEdge },
       peat: { inside: peatInside, units: peatUnits.length },
+      stationary,
       clusterCount: clusters.length,
       smokeAnalyzed: smokeError ? 0 : candidates.length,
       smoky: smoky.length,
@@ -385,11 +455,20 @@ export async function checkLocation(lat: number, lon: number, source: Source, da
 
   let nearest: ReportFire | null = null
   let nearestKm = Infinity
+  let stationary: ReportFire | null = null
+  let stationaryKm = Infinity
   const counts = { km5: 0, km10: 0, km25: 0 }
   for (const fire of report.fires) {
     // Selisih >0,5° berarti jarak >55 km; lewati bila titik yang lebih dekat sudah ditemukan.
     if ((Math.abs(fire[0] - lat) > 0.5 || Math.abs(fire[1] - lon) > 0.5) && nearestKm <= 55) continue
     const km = distanceKm(lat, lon, fire[0], fire[1])
+    if (fire[13] === FLAG_STATIONARY) {
+      if (km < stationaryKm) {
+        stationaryKm = km
+        stationary = fire
+      }
+      continue
+    }
     if (km <= 5) counts.km5++
     if (km <= 10) counts.km10++
     if (km <= 25) counts.km25++
@@ -429,6 +508,12 @@ export async function checkLocation(lat: number, lon: number, source: Source, da
       date: nearest[2],
       time: nearest[3],
       settlement: nearest[7] >= 0 ? report.settlementNames[nearest[7]] : null,
+      confidence: nearest[4],
+    } : null,
+    stationary: stationary && stationaryKm <= 25 ? {
+      km: round(stationaryKm, 1),
+      direction: compassName(bearing(lat, lon, stationary[0], stationary[1])),
+      settlement: stationary[7] >= 0 ? report.settlementNames[stationary[7]] : null,
     } : null,
     counts,
     smoke,

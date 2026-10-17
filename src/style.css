@@ -1388,6 +1388,11 @@ h2 {
   background: rgb(223 155 53 / 0.68);
 }
 
+.legend-fire.stationary {
+  border-color: #6b7280;
+  background: #ffffff;
+}
+
 .legend-fire.low {
   border-color: var(--moss);
   background: rgb(94 157 120 / 0.68);
