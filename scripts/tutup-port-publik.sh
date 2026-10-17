@@ -1,50 +1,74 @@
 #!/usr/bin/env bash
 # Menutup port lokal server aplikasi (10.129.90.36 / publik 103.138.205.33) dari internet.
-#   - Host  : tolak koneksi masuk dari internet kecuali 80/443 (Nginx); jaringan privat tetap boleh (SSH via VPN, proxy 10.129.90.11).
-#   - Docker: port container disaring di rantai DOCKER-USER (ufw biasa tidak berlaku untuk port Docker);
-#             koneksi baru dari internet dibuang, jaringan privat dan balasan koneksi tetap jalan.
-# Pengaman: firewall otomatis dibatalkan 5 menit kemudian kecuali Anda menjalankan
-#   sudo systemctl stop firewall-rollback.timer
-# setelah memastikan SSH dan situs tetap bisa diakses.
+#   - Host  : hanya 80/443 (Nginx) terbuka untuk umum; SSH 9036 hanya dari jaringan privat (VPN, LAN).
+#   - Docker: port container disaring di rantai DOCKER-USER (ufw biasa tidak berlaku untuk port Docker).
+#             Koneksi baru hanya diterima dari jaringan privat (proxy 10.129.90.11, LAN, VPN, antar-container);
+#             selain itu ditolak (deny-by-default, tidak bergantung pada nama antarmuka).
+# Pengaman: keadaan firewall sebelumnya disimpan dan dipulihkan otomatis 5 menit kemudian, kecuali Anda
+# menjalankan  sudo systemctl stop firewall-rollback.timer  setelah memastikan SSH dan situs tetap normal.
 #
 # Jalankan DI SERVER aplikasi:  sudo bash tutup-port-publik.sh
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "Jalankan dengan sudo."; exit 1; }
 
-IFACE="${IFACE:-ens18}"
+SSH_PORT="${SSH_PORT:-9036}"
+PRIVATE_NETS="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
+SNAPSHOT=/root/firewall-sebelum-karhutla
+mkdir -p "$SNAPSHOT"
 
-systemd-run --on-active=300 --unit=firewall-rollback /bin/sh -c \
-  "ufw --force disable; iptables -F DOCKER-USER; iptables -A DOCKER-USER -j RETURN" >/dev/null
-echo "Pembatalan otomatis dalam 5 menit terpasang (unit firewall-rollback)."
-
-cp -n /etc/ufw/after.rules /etc/ufw/after.rules.sebelum-karhutla
-if ! grep -q "BEGIN TUTUP-PORT-DOCKER" /etc/ufw/after.rules; then
-  cat >> /etc/ufw/after.rules <<EOR
-
-# BEGIN TUTUP-PORT-DOCKER: port container hanya untuk jaringan privat, koneksi baru dari internet dibuang
-*filter
-:DOCKER-USER - [0:0]
--A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
--A DOCKER-USER -s 10.0.0.0/8 -j RETURN
--A DOCKER-USER -s 172.16.0.0/12 -j RETURN
--A DOCKER-USER -s 192.168.0.0/16 -j RETURN
--A DOCKER-USER -i $IFACE -m conntrack --ctstate NEW -j DROP
--A DOCKER-USER -j RETURN
-COMMIT
-# END TUTUP-PORT-DOCKER
+# 1. Simpan keadaan awal dan pasang pemulihan otomatis yang memakai snapshot itu.
+iptables-save > "$SNAPSHOT/iptables.rules"
+cp /etc/ufw/after.rules "$SNAPSHOT/after.rules"
+ufw status | head -1 | grep -q "Status: active" && echo active > "$SNAPSHOT/ufw.state" || echo inactive > "$SNAPSHOT/ufw.state"
+cat > "$SNAPSHOT/pulihkan.sh" <<EOR
+#!/bin/sh
+cp "$SNAPSHOT/after.rules" /etc/ufw/after.rules
+[ "\$(cat "$SNAPSHOT/ufw.state")" = active ] || ufw --force disable
+iptables-restore < "$SNAPSHOT/iptables.rules"
 EOR
+chmod 700 "$SNAPSHOT/pulihkan.sh"
+systemd-run --on-active=300 --unit=firewall-rollback /bin/sh "$SNAPSHOT/pulihkan.sh" >/dev/null
+echo "Keadaan awal disimpan di $SNAPSHOT; pemulihan otomatis dalam 5 menit."
+# Bila skrip gagal di tengah jalan, pulihkan segera.
+trap 'echo "Gagal, memulihkan keadaan awal..."; systemctl stop firewall-rollback.timer 2>/dev/null || true; sh "$SNAPSHOT/pulihkan.sh"' ERR
+
+# 2. Aturan DOCKER-USER: izinkan balasan dan jaringan privat, tolak koneksi baru lainnya.
+if ! grep -q "BEGIN TUTUP-PORT-DOCKER" /etc/ufw/after.rules; then
+  {
+    echo
+    echo "# BEGIN TUTUP-PORT-DOCKER: port container hanya untuk jaringan privat"
+    echo "*filter"
+    echo ":DOCKER-USER - [0:0]"
+    echo "-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
+    for net in $PRIVATE_NETS; do echo "-A DOCKER-USER -s $net -j RETURN"; done
+    echo "-A DOCKER-USER -m conntrack --ctstate NEW -j DROP"
+    echo "-A DOCKER-USER -j RETURN"
+    echo "COMMIT"
+    echo "# END TUTUP-PORT-DOCKER"
+  } >> /etc/ufw/after.rules
 fi
 
+# 3. Aturan host: 80/443 untuk umum, SSH hanya dari jaringan privat.
 ufw default deny incoming
 ufw default allow outgoing
 ufw default allow routed
-for net in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do ufw allow from "$net" comment "jaringan privat"; done
 ufw allow 80/tcp comment "nginx http"
 ufw allow 443/tcp comment "nginx https"
+for net in $PRIVATE_NETS; do ufw allow from "$net" to any port "$SSH_PORT" proto tcp comment "ssh jaringan privat"; done
+
+# 4. Tolak paket dengan alamat sumber yang tidak sesuai rute balik (anti-spoofing).
+cat > /etc/sysctl.d/90-rp-filter.conf <<'EOR'
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+EOR
+sysctl -q --system
+
 ufw --force enable
+trap - ERR
 
 ufw status numbered
 iptables -S DOCKER-USER
 echo
-echo "Uji sekarang (SSH baru, situs, proxy). Bila semua baik:  sudo systemctl stop firewall-rollback.timer"
-echo "Bila ada masalah: tunggu 5 menit, atau jalankan  sudo ufw disable && sudo iptables -F DOCKER-USER && sudo iptables -A DOCKER-USER -j RETURN"
+echo "Uji sekarang dari sesi SSH BARU, buka situs, dan cek situs yang lewat proxy 10.129.90.11."
+echo "Bila semua normal:   sudo systemctl stop firewall-rollback.timer"
+echo "Bila ada masalah:    tunggu 5 menit, atau jalankan  sudo sh $SNAPSHOT/pulihkan.sh"
