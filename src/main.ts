@@ -29,11 +29,11 @@ app.innerHTML = `
       <div class="side-label">PEMANTAUAN</div>
       <nav class="side-nav" aria-label="Navigasi utama">
         <a class="nav-link selected" href="#overview"><span class="nav-icon">◫</span> Ringkasan</a>
-        <a class="nav-link" href="#cek-lokasi"><span class="nav-icon">◎</span> Cek lokasi Anda</a>
-        <a class="nav-link" href="#map-section"><span class="nav-icon">⌖</span> Peta hotspot</a>
-        <a class="nav-link" href="#risk"><span class="nav-icon">◬</span> Analisis risiko</a>
-        <a class="nav-link" href="#cctv"><span class="nav-icon">◉</span> CCTV kota</a>
-        <a class="nav-link" href="#detections"><span class="nav-icon">≋</span> Deteksi terbaru</a>
+        <a class="nav-link" href="#cek-lokasi"><span class="nav-icon">◎</span> Cek Lokasi Anda</a>
+        <a class="nav-link" href="#map-section"><span class="nav-icon">⌖</span> Peta Hotspot</a>
+        <a class="nav-link" href="#risk"><span class="nav-icon">◬</span> Analisis Risiko</a>
+        <a class="nav-link" href="#cctv"><span class="nav-icon">◉</span> CCTV Kota</a>
+        <a class="nav-link" href="#detections"><span class="nav-icon">≋</span> Deteksi Terbaru</a>
         <a class="nav-link" href="#about"><span class="nav-icon">ⓘ</span> Metodologi</a>
       </nav>
       <div class="side-bottom">
