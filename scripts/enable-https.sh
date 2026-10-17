@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Mengaktifkan HTTPS untuk amukapi.santaralabs.ai di proxy (bagian [proxy] di secrets/server.txt):
-#   1. terbitkan sertifikat Let's Encrypt lewat webroot /var/www/html (butuh DNS sudah mengarah ke proxy)
+# Mengaktifkan HTTPS untuk amukapi.santaralabs.ai di server aplikasi (bagian [target] di secrets/server.txt):
+#   1. terbitkan sertifikat Let's Encrypt lewat webroot /var/www/html (butuh DNS sudah mengarah ke server ini)
 #   2. pasang deploy/nginx/amukapi.santaralabs.ai.conf, uji nginx -t, reload; kembalikan versi lama bila gagal
 # Kata sandi dikirim lewat stdin ke sudo dan tidak pernah ditampilkan.
 set -euo pipefail
@@ -8,15 +8,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CFG="$ROOT/secrets/server.txt"
 DOMAIN=amukapi.santaralabs.ai
-PUBLIC_IP=103.138.205.146
+PUBLIC_IP=103.138.205.33
 
-get() { awk -v s="[proxy]" -v k="$1" '$0==s{f=1;next} /^\[/{f=0} f && $1==k {sub(/^[^=]*=[ \t]*/,""); print; exit}' "$CFG"; }
+get() { awk -v s="[target]" -v k="$1" '$0==s{f=1;next} /^\[/{f=0} f && $1==k {sub(/^[^=]*=[ \t]*/,""); print; exit}' "$CFG"; }
 HOST=$(get host); USER_=$(get user); PORT=$(get port); PORT=${PORT:-22}
 export SSHPASS="$(get password)"
 SSH_OPTS="-p $PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=60 -o PubkeyAuthentication=no"
 
-RESOLVED=$(dig +short @8.8.8.8 "$DOMAIN" A | tail -1)
-[ "$RESOLVED" = "$PUBLIC_IP" ] || { echo "DNS $DOMAIN = '${RESOLVED:-kosong}', seharusnya $PUBLIC_IP. Buat A record dulu."; exit 1; }
+# Periksa langsung di nameserver otoritatif (resolver publik bisa masih menyimpan nilai lama).
+for NS in $(dig +short NS "${DOMAIN#*.}"); do
+  RESOLVED=$(dig +short @"$NS" "$DOMAIN" A | tail -1)
+  [ "$RESOLVED" = "$PUBLIC_IP" ] || { echo "DNS $DOMAIN di $NS = '${RESOLVED:-kosong}', seharusnya $PUBLIC_IP."; exit 1; }
+done
 
 echo "==> Mengunggah konfigurasi HTTPS"
 base64 < "$ROOT/deploy/nginx/$DOMAIN.conf" | sshpass -e ssh $SSH_OPTS "$USER_@$HOST" "base64 -d > /tmp/$DOMAIN.https.conf"

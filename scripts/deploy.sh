@@ -32,10 +32,11 @@ echo "==> Menulis .env server (hanya FIRMS_MAP_KEY)"
 printf 'FIRMS_MAP_KEY=%s\nTRUST_PROXY=1\n' "$KEY" | remote "umask 077 && cat > $REMOTE_DIR/.env"
 
 echo "==> Build image dan jalankan container"
-remote "cd $REMOTE_DIR && docker build -q -t $APP:latest -f Containerfile . && \
+# Build diulang hingga 3 kali: koneksi server ke Docker Hub kadang gagal sesaat (rute IPv6).
+remote "cd $REMOTE_DIR && for i in 1 2 3; do docker build -q -t $APP:latest -f Containerfile . && break; [ \$i = 3 ] && exit 1; sleep 10; done && \
   (docker rm -f $APP >/dev/null 2>&1 || true) && \
   docker run -d --name $APP --restart unless-stopped \
-    -p $PORT_APP:8787 --env-file .env --memory 768m -v $APP-cache:/app/.cache \
+    -p 127.0.0.1:$PORT_APP:8787 --env-file .env --memory 768m -v $APP-cache:/app/.cache \
     --health-cmd 'wget -qO- http://127.0.0.1:8787/api/health || exit 1' --health-interval 30s \
     $APP:latest >/dev/null && \
   docker image prune -f >/dev/null && \

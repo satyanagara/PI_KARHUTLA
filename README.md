@@ -37,6 +37,21 @@ Kode di folder proyek di-mount ke container: perubahan di `src/` langsung dimuat
 
 Tanpa container: `npm install && npm run dev` (butuh Node.js 22.18+).
 
+## Produksi: amukapi.santaralabs.ai
+
+Situs publik berjalan di server aplikasi `10.129.90.36` (IP publik `103.138.205.33`):
+
+- container Docker `pemantau-karhutla` hanya mendengarkan `127.0.0.1:8787`, cache laporan BNPB di volume `pemantau-karhutla-cache`;
+- Nginx di server yang sama menerima HTTP/HTTPS dan meneruskan ke container ([deploy/nginx/](deploy/nginx/));
+- sertifikat Let's Encrypt diterbitkan dan diperpanjang oleh certbot di server itu.
+
+```bash
+npm run deploy                  # kirim kode, build image di server, ganti container
+bash scripts/enable-https.sh    # sekali saja: sertifikat + konfigurasi HTTPS (butuh DNS A amukapi -> 103.138.205.33)
+```
+
+Kredensial SSH dibaca dari `secrets/server.txt` (tidak di-commit). Server hanya menerima `FIRMS_MAP_KEY` di `~/pemantau-karhutla/.env`.
+
 ## Produksi dengan Podman
 
 ```bash
