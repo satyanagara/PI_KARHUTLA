@@ -890,6 +890,16 @@ navLinks.forEach((link) => link.addEventListener('click', () => {
   navLinks.forEach((item) => item.classList.toggle('selected', item === link))
 }))
 
+// #overview adalah wadah yang digulir itu sendiri, sehingga lompatan anchor biasa tidak kembali ke atas.
+// Logo dan menu Ringkasan menggulir wadah (desktop) dan halaman (ponsel) ke paling atas.
+document.querySelectorAll<HTMLAnchorElement>('a[href="#overview"]').forEach((link) => link.addEventListener('click', (event) => {
+  event.preventDefault()
+  document.querySelector('.workspace')?.scrollTo({ top: 0, behavior: 'smooth' })
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  navLinks.forEach((item) => item.classList.toggle('selected', item.getAttribute('href') === '#overview'))
+  history.replaceState(null, '', location.pathname + location.search)
+}))
+
 // Perbarui otomatis selama halaman terbuka; server sendiri menyegarkan cache tiap 10 menit.
 setInterval(() => {
   if (document.visibilityState === 'visible') {
