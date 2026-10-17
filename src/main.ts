@@ -203,7 +203,7 @@ app.innerHTML = `
             <div><h3>Batasan</h3><p>Hotspot bukan konfirmasi kebakaran, kualitas udara berasal dari model, dan batas kawasan dapat berbeda dari kondisi lapangan. Gunakan sebagai peringatan dini, bukan pengganti verifikasi lapangan.</p></div>
           </div>
         </section>
-        <footer class="app-footer"><span>SUMBER DATA <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS ↗</a></span><span>Deteksi satelit bukan pengganti verifikasi lapangan.</span></footer>
+        <footer class="app-footer"><span>SUMBER DATA <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS ↗</a> · <a href="https://github.com/satyanagara/PI_KARHUTLA" target="_blank" rel="noreferrer">KODE SUMBER (AGPL-3.0) ↗</a></span><span>Deteksi satelit bukan pengganti verifikasi lapangan.</span></footer>
       </div>
     </main>
   </div>

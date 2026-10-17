@@ -126,6 +126,12 @@ Silakan buka *issue* untuk ide atau laporan masalah, atau kirim *pull request*. 
 
 Mohon jangan membuka *issue* publik untuk celah keamanan; hubungi pemelihara proyek secara pribadi lewat GitHub.
 
+## Lisensi
+
+Hak cipta © 2026 Ginanjar dan para kontributor.
+
+Kode sumber dirilis di bawah [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only). Anda bebas memakai, mempelajari, mengubah, dan membagikannya; bila versi yang diubah dijalankan sebagai layanan web untuk orang lain, kode sumbernya juga wajib dibuka dengan lisensi yang sama. Data rujukan di `data/` mengikuti ketentuan sumber masing-masing (lihat [Data rujukan](#data-rujukan)).
+
 ## Atribusi
 
 Hotspot: NASA FIRMS (VIIRS 375 m), BRIN/LAPAN via SiPongi · Laporan lapangan: BNPB · Kawasan hutan, KHG & batas wilayah: Kementerian Kehutanan · Angin & kualitas udara: Open-Meteo (model CAMS, penggunaan non-komersial) · Permukiman: GeoNames · Peta dasar: Esri World Light Gray Canvas.
