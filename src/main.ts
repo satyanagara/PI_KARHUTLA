@@ -22,9 +22,9 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
   <div class="shell">
     <aside class="sidebar">
-      <a class="brand" href="#overview" aria-label="Pemantau Independen KARHUTLA">
+      <a class="brand" href="#overview" aria-label="AMUK API - Pemantau Independen Karhutla">
         <span class="brand-mark"><span></span></span>
-        <span class="brand-name"><small class="brand-kicker">PEMANTAU INDEPENDEN</small>KARHUT<span>LA</span></span>
+        <span class="brand-name"><small class="brand-kicker">PEMANTAU INDEPENDEN KARHUTLA</small>AMUK <span>API</span></span>
       </a>
       <div class="side-label">PEMANTAUAN</div>
       <nav class="side-nav" aria-label="Navigasi utama">
@@ -48,7 +48,7 @@ app.innerHTML = `
 
     <main class="workspace" id="overview">
       <header class="topbar">
-        <a class="topbar-brand" href="#overview" aria-label="Pemantau Independen KARHUTLA"><span class="brand-mark"><span></span></span><span><small>PEMANTAU INDEPENDEN</small><span>KARHUT<b>LA</b></span></span></a>
+        <a class="topbar-brand" href="#overview" aria-label="AMUK API - Pemantau Independen Karhutla"><span class="brand-mark"><span></span></span><span><small>PEMANTAU INDEPENDEN KARHUTLA</small><span>AMUK <b>API</b></span></span></a>
         <div class="crumb"><span>PEMANTAUAN</span><b>/</b> Indonesia</div>
         <div class="top-actions">
           <div class="feed-state" id="feed-state"><span class="state-dot"></span><span id="feed-label">Memuat data</span></div>
@@ -59,7 +59,7 @@ app.innerHTML = `
       <div class="content">
         <section class="page-heading">
           <div>
-            <div class="eyebrow"><span class="eyebrow-line"></span> PEMANTAU INDEPENDEN KARHUTLA</div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> AMUK API · PEMANTAU INDEPENDEN KARHUTLA</div>
             <h1>Situasi kebakaran hutan &amp; lahan <span>Indonesia</span></h1>
             <p class="heading-note">Titik panas satelit NASA FIRMS, perkiraan sebaran asap, dan risikonya bagi permukiman serta kawasan konservasi.</p>
           </div>

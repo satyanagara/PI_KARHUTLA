@@ -150,9 +150,10 @@ a {
   display: block;
   margin-bottom: 4px;
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 500;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
   color: var(--side-faint);
 }
 
@@ -2222,7 +2223,8 @@ tbody tr:hover td {
   font-family: var(--mono);
   font-size: 8px;
   font-weight: 500;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
   color: var(--ink-faint);
 }
 

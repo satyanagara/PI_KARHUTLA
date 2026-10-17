@@ -1,4 +1,4 @@
-# Pemantau Independen KARHUTLA
+# AMUK API - Pemantau Independen Karhutla
 
 Situs publik untuk memantau kebakaran hutan dan lahan (karhutla) di Indonesia: titik panas satelit, perkiraan sebaran asap, dan risikonya bagi warga, kawasan hutan, serta lahan gambut.
 

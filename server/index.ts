@@ -1,4 +1,4 @@
-// Server web Pemantau Independen KARHUTLA: menyajikan halaman hasil build (dist/), API /api/hotspots, dan data kawasan lindung.
+// Server web AMUK API - Pemantau Independen Karhutla: menyajikan halaman hasil build (dist/), API /api/hotspots, dan data kawasan lindung.
 // Jalankan dengan Node 22.18+ (type stripping bawaan): node --env-file-if-exists=.env.local server/index.ts
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createHash } from 'node:crypto'
