@@ -1,0 +1,387 @@
+// Mengambil hotspot NASA FIRMS dan data asap Open-Meteo, menjalankan analisis risiko, dan menyimpan hasilnya di cache
+// supaya lalu lintas publik tidak membebani kuota sumber data.
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import {
+  AreaIndex,
+  SETTLEMENT_ALERT_KM,
+  SettlementIndex,
+  assessFire,
+  buildClusters,
+  buildSmoke,
+  bearing,
+  compassName,
+  distanceKm,
+  inPlume,
+  ispuLevel,
+  levelRank,
+  priorityScore,
+  type Fire,
+  type FireRisk,
+  type SmokeReading,
+} from '../src/risk.ts'
+import type { AreaRank, ExposedTown, LocationCheck, Report, ReportFire, Source } from '../src/report-types.ts'
+
+const REPORT_TTL_MS = 10 * 60 * 1000
+const SMOKE_TTL_MS = 30 * 60 * 1000
+const SMOKE_CLUSTERS = 30
+const PRIORITY_CLUSTERS = 30
+const FIRMS_AREA = '94,-11,142,6'
+
+type Reference = { settlements: SettlementIndex; areas: AreaIndex; peat: AreaIndex }
+let reference: Reference | null = null
+
+// Permukiman: GeoNames. Kawasan hutan (konservasi & lindung) dan KHG gambut: Kementerian Kehutanan (SIGAP).
+export async function loadReference(dataDir: string) {
+  const readGeojson = async (name: string) => {
+    const geojson = JSON.parse(await readFile(path.join(dataDir, name), 'utf8'))
+    geojson.features = geojson.features.filter((feature: { geometry: unknown }) => feature.geometry)
+    return AreaIndex.parse(geojson)
+  }
+  const [settlementText, areas, peat] = await Promise.all([
+    readFile(path.join(dataDir, 'settlements.txt'), 'utf8'),
+    readGeojson('kawasan-hutan.json'),
+    readGeojson('gambut.json'),
+  ])
+  reference = { settlements: SettlementIndex.parse(settlementText), areas, peat }
+  return { settlements: reference.settlements.items.length, areas: areas.areas.length, peat: peat.areas.length }
+}
+
+// ---------- NASA FIRMS ----------
+
+function parseCsv(text: string): Fire[] {
+  const lines = text.trim().split(/\r?\n/)
+  if (lines.length < 1 || !lines[0].toLowerCase().startsWith('latitude,longitude')) {
+    throw new Error(`FIRMS: ${text.trim().slice(0, 200) || 'respons kosong'}`)
+  }
+  const headers = lines[0].split(',').map((value) => value.trim())
+  return lines.slice(1).filter(Boolean).map((line) => {
+    const values = line.split(',')
+    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? '']))
+  })
+}
+
+async function fetchFirms(source: Source, days: number) {
+  const key = process.env.FIRMS_MAP_KEY
+  if (!key) throw new Error('Server belum dikonfigurasi: FIRMS_MAP_KEY kosong.')
+  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/${source}/${FIRMS_AREA}/${days}`
+  const response = await fetch(url, { signal: AbortSignal.timeout(30000) })
+  const body = await response.text()
+  if (!response.ok) throw new Error(`FIRMS (${response.status}): ${body.slice(0, 200)}`)
+  return parseCsv(body)
+}
+
+// ---------- Open-Meteo ----------
+
+const smokeCache = new Map<string, { at: number; reading: SmokeReading }>()
+const smokeKey = (lat: number, lon: number) => `${lat.toFixed(1)},${lon.toFixed(1)}`
+const meanOf = (values: number[]) => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null)
+
+async function getJson(url: string) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(30000) })
+  if (!response.ok) throw new Error(`Open-Meteo (${response.status}): ${(await response.text()).slice(0, 200)}`)
+  const body = await response.json()
+  return Array.isArray(body) ? body : [body]
+}
+
+// Angin 10 m dan PM2.5 model CAMS. Titik dibulatkan 0,1° dan di-cache 30 menit.
+async function fetchSmoke(points: { lat: number; lon: number }[]) {
+  const now = Date.now()
+  const missing = points.filter(({ lat, lon }) => {
+    const hit = smokeCache.get(smokeKey(lat, lon))
+    return !hit || now - hit.at > SMOKE_TTL_MS
+  })
+  if (missing.length) {
+    const latitude = missing.map(({ lat }) => lat.toFixed(3)).join(',')
+    const longitude = missing.map(({ lon }) => lon.toFixed(3)).join(',')
+    const [air, wind] = await Promise.all([
+      getJson(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=pm2_5&hourly=pm2_5&past_days=1&forecast_days=2&timezone=GMT`),
+      getJson(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=kmh&timezone=GMT`),
+    ])
+    missing.forEach(({ lat, lon }, index) => {
+      const hourly = air[index]?.hourly ?? { time: [], pm2_5: [] }
+      const past: number[] = []
+      const next: number[] = []
+      hourly.time.forEach((time: string, hour: number) => {
+        const value = hourly.pm2_5[hour]
+        if (typeof value !== 'number') return
+        const at = Date.parse(`${time}Z`)
+        if (at <= now && at > now - 24 * 3600 * 1000) past.push(value)
+        if (at > now && at <= now + 24 * 3600 * 1000) next.push(value)
+      })
+      smokeCache.set(smokeKey(lat, lon), {
+        at: now,
+        reading: {
+          pm25Now: air[index]?.current?.pm2_5 ?? null,
+          pm25Mean24: meanOf(past),
+          pm25Max24: next.length ? Math.max(...next) : null,
+          windKmh: wind[index]?.current?.wind_speed_10m ?? 0,
+          windFrom: wind[index]?.current?.wind_direction_10m ?? 0,
+        },
+      })
+    })
+  }
+  return points.map(({ lat, lon }) => smokeCache.get(smokeKey(lat, lon))!.reading)
+}
+
+// ---------- Laporan ----------
+
+const confidenceOf = (raw: string) => {
+  const value = raw.toLowerCase()
+  if (value === 'h' || value === 'high' || Number(value) >= 80) return 'high'
+  if (value === 'l' || value === 'low' || (Number(value) > 0 && Number(value) < 40)) return 'low'
+  return 'medium'
+}
+const round = (value: number, digits: number) => Math.round(value * 10 ** digits) / 10 ** digits
+
+async function buildReport(source: Source, days: number): Promise<Report> {
+  if (!reference) throw new Error('Data rujukan belum dimuat.')
+  const { settlements, areas, peat } = reference
+  // FIRMS day_range=1 hanya berisi tanggal UTC hari ini, jadi 24 jam diambil dari 2 hari lalu disaring.
+  const raw = await fetchFirms(source, days === 1 ? 2 : days)
+  const fetchedAt = new Date()
+  const cutoff = fetchedAt.getTime() - 24 * 3600 * 1000
+  const rows = days === 1 ? raw.filter((fire) => {
+    const time = String(fire.acq_time ?? '').padStart(4, '0')
+    return Date.parse(`${fire.acq_date}T${time.slice(0, 2)}:${time.slice(2)}:00Z`) >= cutoff
+  }) : raw
+
+  const settlementNames: string[] = []
+  const settlementIndex = new Map<string, number>()
+  const areaList: Report['areas'] = []
+  const areaIndex = new Map<string, number>()
+  const peatUnits: string[] = []
+  const peatIndex = new Map<string, number>()
+  const intern = <T>(map: Map<string, number>, list: T[], key: string, value: T) => {
+    let index = map.get(key)
+    if (index === undefined) {
+      index = list.push(value) - 1
+      map.set(key, index)
+    }
+    return index
+  }
+
+  const fires: ReportFire[] = []
+  const assessed: Parameters<typeof buildClusters>[0] = []
+  const ranking = new Map<string, AreaRank>()
+  const villages = new Set<string>()
+  let high = 0
+  let totalFrp = 0
+  let nearSettlement = 0
+  let peatInside = 0
+  const kinds = { konservasi: { inside: 0, nearEdge: 0, names: new Set<string>() }, lindung: { inside: 0, nearEdge: 0, names: new Set<string>() } }
+
+  for (const fire of rows) {
+    const lat = Number(fire.latitude)
+    const lon = Number(fire.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
+    const frp = Number(fire.frp) || 0
+    const isHigh = confidenceOf(fire.confidence ?? '') === 'high'
+    const risk: FireRisk = assessFire(lat, lon, settlements, areas, peat)
+    const time = String(fire.acq_time ?? '').padStart(4, '0')
+
+    if (isHigh) high++
+    totalFrp += frp
+    if (risk.settlement && risk.settlementKm <= SETTLEMENT_ALERT_KM) {
+      nearSettlement++
+      villages.add(`${risk.settlement.name}|${risk.settlement.lat}|${risk.settlement.lon}`)
+    }
+    if (risk.peat) peatInside++
+    if (risk.area && risk.area.kind !== 'gambut') {
+      const bucket = kinds[risk.area.kind]
+      if (risk.area.km === 0) {
+        bucket.inside++
+        bucket.names.add(risk.area.name)
+      } else bucket.nearEdge++
+      const entry = ranking.get(risk.area.name) ?? { name: risk.area.name, kind: risk.area.kind, inside: 0, near: 0, frp: 0 }
+      if (risk.area.km === 0) {
+        entry.inside++
+        entry.frp += frp
+      } else entry.near++
+      ranking.set(risk.area.name, entry)
+    }
+
+    fires.push([
+      round(lat, 5),
+      round(lon, 5),
+      fire.acq_date ?? '',
+      time,
+      fire.confidence ?? '',
+      round(frp, 2),
+      fire.daynight ?? '',
+      risk.settlement ? intern(settlementIndex, settlementNames, risk.settlement.name, risk.settlement.name) : -1,
+      risk.settlement ? round(risk.settlementKm, 2) : -1,
+      risk.area ? intern(areaIndex, areaList, risk.area.name, { name: risk.area.name, kind: risk.area.kind }) : -1,
+      risk.area ? round(risk.area.km, 2) : -1,
+      risk.peat ? intern(peatIndex, peatUnits, risk.peat, risk.peat) : -1,
+    ])
+    assessed.push({ lat, lon, fire, risk, high: isHigh, time: `${fire.acq_date} ${time.slice(0, 2)}:${time.slice(2)}` })
+  }
+
+  const clusters = buildClusters(assessed).sort((a, b) => priorityScore(b) - priorityScore(a))
+  const candidates = clusters.slice(0, SMOKE_CLUSTERS)
+  let smokeError: string | null = null
+  if (candidates.length) {
+    try {
+      const readings = await fetchSmoke(candidates.map(({ lat, lon }) => ({ lat, lon })))
+      candidates.forEach((cluster, index) => { cluster.smoke = buildSmoke(cluster, readings[index], settlements) })
+      clusters.sort((a, b) => priorityScore(b) - priorityScore(a))
+    } catch (error) {
+      smokeError = error instanceof Error ? error.message : String(error)
+    }
+  }
+  const smoky = clusters.filter((cluster) => ['tidak-sehat', 'sangat-tidak-sehat', 'berbahaya'].includes(cluster.smoke?.level.key ?? ''))
+
+  // Kota di jalur asap; bila satu kota terkena beberapa jalur, ambil kategori terburuk.
+  const towns = new Map<string, ExposedTown>()
+  for (const cluster of clusters) {
+    const smoke = cluster.smoke
+    if (!smoke || levelRank(smoke.level.key) < levelRank('sedang')) continue
+    for (const town of smoke.towns) {
+      const key = `${town.name}|${town.lat}|${town.lon}`
+      const known = towns.get(key)
+      if (known && levelRank(known.level.key) >= levelRank(smoke.level.key)) continue
+      towns.set(key, {
+        name: town.name,
+        province: town.province,
+        lat: town.lat,
+        lon: town.lon,
+        level: smoke.level,
+        pm25: smoke.pm25Mean24 ?? smoke.pm25Now,
+        fireKm: round(distanceKm(town.lat, town.lon, cluster.lat, cluster.lon), 1),
+        fireDirection: compassName(bearing(town.lat, town.lon, cluster.lat, cluster.lon)),
+      })
+    }
+  }
+  const exposedTowns = [...towns.values()].sort((a, b) => levelRank(b.level.key) - levelRank(a.level.key) || a.fireKm - b.fireKm).slice(0, 40)
+
+  return {
+    source,
+    days,
+    fetchedAt: fetchedAt.toISOString(),
+    settlementNames,
+    areas: areaList,
+    peatUnits,
+    fires,
+    summary: {
+      total: fires.length,
+      high,
+      frp: Math.round(totalFrp),
+      nearSettlement,
+      villages: villages.size,
+      konservasi: { inside: kinds.konservasi.inside, areas: kinds.konservasi.names.size, nearEdge: kinds.konservasi.nearEdge },
+      lindung: { inside: kinds.lindung.inside, areas: kinds.lindung.names.size, nearEdge: kinds.lindung.nearEdge },
+      peat: { inside: peatInside, units: peatUnits.length },
+      clusterCount: clusters.length,
+      smokeAnalyzed: smokeError ? 0 : candidates.length,
+      smoky: smoky.length,
+      exposed: smoky.reduce((sum, cluster) => sum + (cluster.smoke?.settlements ?? 0), 0),
+    },
+    areaRanking: [...ranking.values()].sort((a, b) => b.inside - a.inside || b.near - a.near).slice(0, 8).map((entry) => ({ ...entry, frp: Math.round(entry.frp) })),
+    clusters: clusters.slice(0, PRIORITY_CLUSTERS),
+    exposedTowns,
+    smokeError,
+  }
+}
+
+// ---------- Cache ----------
+
+export type CachedReport = { at: number; json: string; report: Report }
+const reports = new Map<string, CachedReport>()
+const inflight = new Map<string, Promise<CachedReport>>()
+
+// Mengembalikan laporan segar dari cache; bila kedaluwarsa, laporan lama dikirim sambil diperbarui di latar belakang.
+export async function getReport(source: Source, days: number): Promise<CachedReport> {
+  const key = `${source}:${days}`
+  const hit = reports.get(key)
+  if (hit && Date.now() - hit.at < REPORT_TTL_MS) return hit
+  let pending = inflight.get(key)
+  if (!pending) {
+    pending = buildReport(source, days)
+      .then((report) => {
+        const entry = { at: Date.now(), json: JSON.stringify(report), report }
+        reports.set(key, entry)
+        return entry
+      })
+      .finally(() => inflight.delete(key))
+    inflight.set(key, pending)
+  }
+  if (hit) {
+    pending.catch((error) => console.error(`[report] gagal memperbarui ${key}:`, error.message))
+    return hit
+  }
+  return pending
+}
+
+export function cacheStatus() {
+  return [...reports.entries()].map(([key, entry]) => ({ key, ageSeconds: Math.round((Date.now() - entry.at) / 1000) }))
+}
+
+// ---------- Cek lokasi warga ----------
+
+export function searchPlaces(query: string) {
+  if (!reference) return []
+  return reference.settlements.search(query).map(({ name, province, lat, lon, rank }) => ({ name, province, lat, lon, rank }))
+}
+
+export async function checkLocation(lat: number, lon: number, source: Source, days: number): Promise<LocationCheck> {
+  if (!reference) throw new Error('Data rujukan belum dimuat.')
+  const { report } = await getReport(source, days)
+  const place = reference.settlements.nearest(lat, lon, 15)
+
+  let nearest: ReportFire | null = null
+  let nearestKm = Infinity
+  const counts = { km5: 0, km10: 0, km25: 0 }
+  for (const fire of report.fires) {
+    // Selisih >0,5° berarti jarak >55 km; lewati bila titik yang lebih dekat sudah ditemukan.
+    if ((Math.abs(fire[0] - lat) > 0.5 || Math.abs(fire[1] - lon) > 0.5) && nearestKm <= 55) continue
+    const km = distanceKm(lat, lon, fire[0], fire[1])
+    if (km <= 5) counts.km5++
+    if (km <= 10) counts.km10++
+    if (km <= 25) counts.km25++
+    if (km < nearestKm) {
+      nearestKm = km
+      nearest = fire
+    }
+  }
+
+  const smoke = report.clusters
+    .filter((cluster) => cluster.smoke && inPlume(cluster, lat, lon))
+    .map((cluster) => ({
+      level: cluster.smoke!.level,
+      fireKm: round(distanceKm(lat, lon, cluster.lat, cluster.lon), 1),
+      fireDirection: compassName(bearing(lat, lon, cluster.lat, cluster.lon)),
+      place: cluster.nearest?.name ?? null,
+    }))
+    .sort((a, b) => levelRank(b.level.key) - levelRank(a.level.key))
+
+  let air: LocationCheck['air'] = null
+  try {
+    const [reading] = await fetchSmoke([{ lat, lon }])
+    air = { ...reading, level: ispuLevel(reading.pm25Mean24 ?? reading.pm25Now) }
+  } catch (error) {
+    console.error('[lokasi] kualitas udara gagal dimuat:', error instanceof Error ? error.message : error)
+  }
+
+  const candidates = [air?.level, ...smoke.map((entry) => entry.level)].filter((level) => level !== undefined)
+  const level = candidates.sort((a, b) => levelRank(b.key) - levelRank(a.key))[0] ?? ispuLevel(null)
+
+  return {
+    place: place.settlement ? { name: place.settlement.name, province: place.settlement.province, km: round(place.km, 1) } : null,
+    nearestFire: nearest ? {
+      km: round(nearestKm, 1),
+      direction: compassName(bearing(lat, lon, nearest[0], nearest[1])),
+      frp: nearest[5],
+      date: nearest[2],
+      time: nearest[3],
+      settlement: nearest[7] >= 0 ? report.settlementNames[nearest[7]] : null,
+    } : null,
+    counts,
+    smoke,
+    air,
+    level,
+    source,
+    days,
+    fetchedAt: report.fetchedAt,
+  }
+}

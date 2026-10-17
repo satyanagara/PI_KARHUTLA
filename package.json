@@ -1,0 +1,27 @@
+{
+  "name": "pemantau-karhutla",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c yellow,cyan \"node scripts/dev-api.mjs\" \"vite\"",
+    "build": "tsc && vite build",
+    "start": "NODE_ENV=production node --env-file-if-exists=.env.local server/index.ts",
+    "typecheck": "tsc",
+    "data": "bash scripts/build-reference-data.sh",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^24.19.2",
+    "concurrently": "^10.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

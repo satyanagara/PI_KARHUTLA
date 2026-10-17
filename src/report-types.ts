@@ -1,0 +1,67 @@
+// Bentuk respons /api/hotspots, dipakai bersama oleh server dan halaman web.
+import type { AreaKind, Cluster, IspuLevel } from './risk.ts'
+
+export const SOURCES = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT'] as const
+export const DAY_OPTIONS = [1, 3, 5] as const
+export type Source = (typeof SOURCES)[number]
+
+// Satu titik panas dalam bentuk larik ringkas agar payload kecil:
+// [lat, lon, tanggal, jam(HHMM), confidence, frp, day/night, idx permukiman, jarak permukiman km, idx kawasan, jarak kawasan km, idx KHG]
+// Indeks -1 berarti tidak ada permukiman dalam radius pencarian / tidak dekat kawasan / bukan lahan gambut.
+export type ReportFire = [number, number, string, string, string, number, string, number, number, number, number, number]
+
+export type AreaRank = { name: string; kind: AreaKind; inside: number; near: number; frp: number }
+
+export type ReportSummary = {
+  total: number
+  high: number
+  frp: number
+  nearSettlement: number
+  villages: number
+  konservasi: { inside: number; areas: number; nearEdge: number }
+  lindung: { inside: number; areas: number; nearEdge: number }
+  peat: { inside: number; units: number }
+  clusterCount: number
+  smokeAnalyzed: number
+  smoky: number
+  exposed: number
+}
+
+// Kota/kecamatan yang berada di jalur asap kluster dengan kualitas udara sedang atau lebih buruk.
+export type ExposedTown = {
+  name: string
+  province: string
+  lat: number
+  lon: number
+  level: IspuLevel
+  pm25: number | null
+  fireKm: number
+  fireDirection: string
+}
+
+export type LocationCheck = {
+  place: { name: string; province: string; km: number } | null
+  nearestFire: { km: number; direction: string; frp: number; date: string; time: string; settlement: string | null } | null
+  counts: { km5: number; km10: number; km25: number }
+  smoke: { level: IspuLevel; fireKm: number; fireDirection: string; place: string | null }[]
+  air: { pm25Mean24: number | null; pm25Now: number | null; pm25Max24: number | null; windKmh: number; windFrom: number; level: IspuLevel } | null
+  level: IspuLevel
+  source: Source
+  days: number
+  fetchedAt: string
+}
+
+export type Report = {
+  source: Source
+  days: number
+  fetchedAt: string
+  settlementNames: string[]
+  areas: { name: string; kind: AreaKind }[]
+  peatUnits: string[]
+  fires: ReportFire[]
+  summary: ReportSummary
+  areaRanking: AreaRank[]
+  clusters: Cluster[]
+  exposedTowns: ExposedTown[]
+  smokeError: string | null
+}

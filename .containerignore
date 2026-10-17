@@ -1,0 +1,7 @@
+node_modules
+dist
+.env*
+.remember
+.playwright-mcp
+.git
+secrets
