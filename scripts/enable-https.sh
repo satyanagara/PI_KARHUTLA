@@ -7,11 +7,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CFG="$ROOT/secrets/server.txt"
-DOMAIN=amukapi.santaralabs.ai
-PUBLIC_IP=103.138.205.33
 
 get() { awk -v s="[target]" -v k="$1" '$0==s{f=1;next} /^\[/{f=0} f && $1==k {sub(/^[^=]*=[ \t]*/,""); print; exit}' "$CFG"; }
 HOST=$(get host); USER_=$(get user); PORT=$(get port); PORT=${PORT:-22}
+DOMAIN=$(get domain); PUBLIC_IP=$(get public_ip)
+[ -n "$DOMAIN" ] && [ -n "$PUBLIC_IP" ] || { echo "Isi domain dan public_ip di bagian [target] secrets/server.txt (lihat deploy/server.example.txt)."; exit 1; }
 export SSHPASS="$(get password)"
 SSH_OPTS="-p $PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=60 -o PubkeyAuthentication=no"
 

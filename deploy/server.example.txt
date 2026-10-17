@@ -1,0 +1,10 @@
+# Salin ke secrets/server.txt lalu isi dengan data server Anda. secrets/ diabaikan git dan container.
+# Dibaca oleh scripts/deploy.sh dan scripts/enable-https.sh; kata sandi dikirim ke sshpass/sudo lewat
+# variabel lingkungan atau stdin, tidak pernah ditampilkan.
+[target]
+host = 192.0.2.10
+port = 22
+user = deploy
+password = ganti-dengan-kata-sandi
+domain = pemantau.example.org
+public_ip = 203.0.113.10

@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Menutup port lokal server aplikasi (10.129.90.36 / publik 103.138.205.33) dari internet.
-#   - Host  : hanya 80/443 (Nginx) terbuka untuk umum; SSH 9036 hanya dari jaringan privat (VPN, LAN).
+# Menutup port lokal server aplikasi dari internet.
+#   - Host  : hanya 80/443 (Nginx) terbuka untuk umum; SSH hanya dari jaringan privat (VPN, LAN).
 #   - Docker: port container disaring di rantai DOCKER-USER (ufw biasa tidak berlaku untuk port Docker).
-#             Koneksi baru hanya diterima dari jaringan privat (proxy 10.129.90.11, LAN, VPN, antar-container);
+#             Koneksi baru hanya diterima dari jaringan privat (reverse proxy internal, LAN, VPN, antar-container);
 #             selain itu ditolak (deny-by-default, tidak bergantung pada nama antarmuka).
 # Pengaman: keadaan firewall sebelumnya disimpan dan dipulihkan otomatis 5 menit kemudian, kecuali Anda
 # menjalankan  sudo systemctl stop firewall-rollback.timer  setelah memastikan SSH dan situs tetap normal.
 #
-# Jalankan DI SERVER aplikasi:  sudo bash tutup-port-publik.sh
+# Jalankan DI SERVER aplikasi:  sudo SSH_PORT=<port ssh> bash tutup-port-publik.sh
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "Jalankan dengan sudo."; exit 1; }
 
-SSH_PORT="${SSH_PORT:-9036}"
+SSH_PORT="${SSH_PORT:-22}"
 PRIVATE_NETS="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
 SNAPSHOT=/root/firewall-sebelum-karhutla
 mkdir -p "$SNAPSHOT"
@@ -69,6 +69,6 @@ trap - ERR
 ufw status numbered
 iptables -S DOCKER-USER
 echo
-echo "Uji sekarang dari sesi SSH BARU, buka situs, dan cek situs yang lewat proxy 10.129.90.11."
+echo "Uji sekarang dari sesi SSH BARU, buka situs, dan cek layanan yang diakses lewat reverse proxy internal."
 echo "Bila semua normal:   sudo systemctl stop firewall-rollback.timer"
 echo "Bila ada masalah:    tunggu 5 menit, atau jalankan  sudo sh $SNAPSHOT/pulihkan.sh"
