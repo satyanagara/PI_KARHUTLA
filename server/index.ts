@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib'
 import { DAY_OPTIONS, SOURCES, type Source } from '../src/report-types.ts'
 import { getBnpbReport } from './bnpb.ts'
+import { getCctv } from './cctv.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
 
 // Server tanpa IPv6: dahulukan IPv4 dan beri waktu cukup per percobaan koneksi. Batas bawaan Node (250 ms)
@@ -42,7 +43,8 @@ const SECURITY_HEADERS = {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://server.arcgisonline.com",
+    "img-src 'self' data: https://server.arcgisonline.com https://i.ytimg.com",
+    "frame-src https://www.youtube-nocookie.com",
     "connect-src 'self'",
     "font-src 'self'",
     "frame-ancestors 'none'",
@@ -212,6 +214,15 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/api/hotspots') return allowed(req, res) && (await handleHotspots(req, res, url))
     if (url.pathname === '/api/lokasi') return allowed(req, res) && (await handleLocation(req, res, url))
+    if (url.pathname === '/api/cctv') {
+      if (!allowed(req, res)) return
+      try {
+        return sendJson(req, res, await getCctv(), 'public, max-age=600')
+      } catch (error) {
+        console.error('[cctv]', error)
+        return sendError(res, 502, 'Daftar CCTV sedang tidak tersedia.')
+      }
+    }
     if (url.pathname === '/api/laporan-bnpb') {
       if (!allowed(req, res)) return
       try {

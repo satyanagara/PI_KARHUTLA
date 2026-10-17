@@ -91,3 +91,10 @@ export type BnpbProvinceReport = {
 }
 
 export type BnpbReport = { updatedAt: string; fetchedAt: string; provinces: BnpbProvinceReport[] }
+
+// CCTV kota yang terbuka untuk publik: siaran YouTube (disematkan) dan portal milik pemda (ditautkan).
+export type CctvReport = {
+  fetchedAt: string
+  youtube: { city: string; province: string; operator: string; channelUrl: string; streams: { id: string; location: string }[] }[]
+  portals: { city: string; province: string; operator: string; url: string; note: string }[]
+}

@@ -901,6 +901,161 @@ h1 span {
   color: var(--ink-faint);
 }
 
+/* ---------- CCTV kota ---------- */
+
+.cctv-section {
+  scroll-margin-top: 80px;
+}
+
+.cctv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 14px;
+}
+
+.cctv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.cctv-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cctv-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.cctv-head small {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.cctv-head .select-wrap {
+  flex: 1 1 200px;
+  max-width: 280px;
+}
+
+.cctv-head select {
+  width: 100%;
+}
+
+.cctv-frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  background: #16251d;
+}
+
+.cctv-frame iframe,
+.cctv-facade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.cctv-facade {
+  padding: 0;
+  background: #16251d;
+  cursor: pointer;
+}
+
+.cctv-facade img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.85;
+}
+
+.cctv-play {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgb(22 37 29 / 0.85);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.cctv-facade:hover .cctv-play {
+  background: var(--fire);
+}
+
+.cctv-link {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fire);
+  text-decoration: none;
+}
+
+.cctv-subhead {
+  margin: 18px 0 10px;
+  font-size: 14px;
+}
+
+.cctv-portals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cctv-portals a {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  height: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.cctv-portals a:hover {
+  border-color: var(--ink-faint);
+}
+
+.cctv-portals small {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.cctv-portals span {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.cctv-portals em {
+  margin-top: auto;
+  padding-top: 6px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--fire);
+}
+
 /* ---------- Statistik ---------- */
 
 .stats-grid {
@@ -2465,5 +2620,15 @@ tbody tr:hover td {
   .app-footer {
     flex-direction: column;
     gap: 6px;
+  }
+}
+
+@media (max-width: 720px) {
+  .cctv-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cctv-head .select-wrap {
+    max-width: none;
   }
 }

@@ -2,7 +2,7 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, levelRank, type Cluster, type IspuLevel } from './risk.ts'
-import { DAY_OPTIONS, SOURCES, type BnpbReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
+import { DAY_OPTIONS, SOURCES, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
 const sourceNames: Record<Source, string> = {
   VIIRS_NOAA21_NRT: 'NOAA-21 · VIIRS 375 m',
@@ -32,6 +32,7 @@ app.innerHTML = `
         <a class="nav-link" href="#cek-lokasi"><span class="nav-icon">◎</span> Cek lokasi Anda</a>
         <a class="nav-link" href="#map-section"><span class="nav-icon">⌖</span> Peta hotspot</a>
         <a class="nav-link" href="#risk"><span class="nav-icon">◬</span> Analisis risiko</a>
+        <a class="nav-link" href="#cctv"><span class="nav-icon">◉</span> CCTV kota</a>
         <a class="nav-link" href="#detections"><span class="nav-icon">≋</span> Deteksi terbaru</a>
         <a class="nav-link" href="#about"><span class="nav-icon">ⓘ</span> Metodologi</a>
       </nav>
@@ -169,6 +170,17 @@ app.innerHTML = `
               <div class="disclaimer"><span class="info-mark">i</span><p>Jalur asap adalah <strong>perkiraan 6 jam searah angin</strong>; kualitas udara dari model CAMS (resolusi ±40 km), bukan alat ukur lapangan.</p></div>
             </article>
           </div>
+        </section>
+
+        <section class="cctv-section" id="cctv">
+          <div class="section-head">
+            <div><div class="section-kicker">PANTAUAN VISUAL</div><h2>CCTV kota di daerah berasap</h2></div>
+            <span class="risk-state" id="cctv-state">Memuat daftar kamera…</span>
+          </div>
+          <p class="panel-intro">Kamera lalu lintas milik pemerintah kota yang terbuka untuk umum. Ini bukan kamera pemantau api, tetapi sering memperlihatkan seberapa pekat kabut asap. Video dimuat dari YouTube hanya setelah Anda menekan putar.</p>
+          <div class="cctv-grid" id="cctv-grid"></div>
+          <h3 class="cctv-subhead">Portal CCTV pemerintah kota</h3>
+          <ul class="cctv-portals" id="cctv-portals"></ul>
         </section>
 
         <section class="lower-grid" id="detections">
@@ -375,6 +387,52 @@ async function loadBnpb() {
     byId('bnpb-state').className = 'risk-state error'
   }
 }
+
+// ---------- CCTV kota ----------
+
+function cctvPlayer(videoId: string, label: string) {
+  return `<button type="button" class="cctv-facade" data-video="${escapeHtml(videoId)}" aria-label="Putar siaran langsung ${escapeHtml(label)}">
+    <img src="https://i.ytimg.com/vi/${escapeHtml(videoId)}/hqdefault_live.jpg" alt="" loading="lazy" />
+    <span class="cctv-play">▶ Putar siaran langsung</span>
+  </button>`
+}
+
+function renderCctv(data: CctvReport) {
+  byId('cctv-state').textContent = `${data.youtube.reduce((sum, channel) => sum + channel.streams.length, 0)} kamera siaran langsung · ${data.portals.length} portal`
+  byId('cctv-state').className = 'risk-state'
+  byId('cctv-grid').innerHTML = data.youtube.filter((channel) => channel.streams.length).map((channel, index) => `
+    <article class="cctv-card" data-channel="${index}">
+      <div class="cctv-head"><div><h3>${escapeHtml(channel.city)}</h3><small>${escapeHtml(channel.province)} · ${escapeHtml(channel.operator)}</small></div>
+        <label class="select-wrap"><span class="sr-only">Pilih lokasi kamera ${escapeHtml(channel.city)}</span><select data-cctv-select="${index}">${channel.streams.map((stream) => `<option value="${escapeHtml(stream.id)}">${escapeHtml(stream.location)}</option>`).join('')}</select></label>
+      </div>
+      <div class="cctv-frame" data-cctv-frame="${index}">${cctvPlayer(channel.streams[0].id, `${channel.city} ${channel.streams[0].location}`)}</div>
+      <a class="cctv-link" href="${escapeHtml(channel.channelUrl)}" target="_blank" rel="noreferrer">Semua kamera ${escapeHtml(channel.city)} di YouTube ↗</a>
+    </article>`).join('') || '<p class="area-empty">Siaran YouTube sedang tidak tersedia.</p>'
+  byId('cctv-portals').innerHTML = data.portals.map((portal) => `
+    <li><a href="${escapeHtml(portal.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(portal.city)}</strong><small>${escapeHtml(portal.province)} · ${escapeHtml(portal.operator)}</small><span>${escapeHtml(portal.note)}</span><em>Buka portal ↗</em></a></li>`).join('')
+
+  // Gambar pratinjau live kadang belum tersedia; pakai pratinjau biasa sebagai cadangan.
+  byId('cctv-grid').querySelectorAll<HTMLImageElement>('.cctv-facade img').forEach((image) => {
+    image.addEventListener('error', () => {
+      if (!image.src.endsWith('/hqdefault.jpg')) image.src = image.src.replace('hqdefault_live.jpg', 'hqdefault.jpg')
+    }, { once: true })
+  })
+}
+
+async function loadCctv() {
+  try {
+    const response = await fetch('/api/cctv')
+    const body = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(body?.error ?? `Server merespons ${response.status}`)
+    cctvData = body as CctvReport
+    renderCctv(cctvData)
+  } catch (error) {
+    byId('cctv-state').textContent = error instanceof Error ? error.message : 'Daftar CCTV tidak tersedia.'
+    byId('cctv-state').className = 'risk-state error'
+  }
+}
+
+let cctvData: CctvReport | null = null
 
 function formatPm(value: number | null) {
   return value === null ? '–' : `${Math.round(value)} µg/m³`
@@ -785,6 +843,28 @@ byId<HTMLInputElement>('layer-peat').addEventListener('change', (event) => {
     else void loadPeat()
   } else peatLayer?.remove()
 })
+byId('cctv-grid').addEventListener('click', (event) => {
+  const facade = (event.target as HTMLElement).closest<HTMLButtonElement>('.cctv-facade')
+  if (!facade) return
+  const videoId = facade.dataset.video ?? ''
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return
+  const frame = document.createElement('iframe')
+  frame.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&rel=0&playsinline=1`
+  frame.title = facade.getAttribute('aria-label') ?? 'Siaran CCTV'
+  frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'
+  frame.allowFullscreen = true
+  frame.referrerPolicy = 'strict-origin-when-cross-origin'
+  facade.replaceWith(frame)
+})
+byId('cctv-grid').addEventListener('change', (event) => {
+  const select = (event.target as HTMLElement).closest<HTMLSelectElement>('select[data-cctv-select]')
+  if (!select) return
+  const index = select.dataset.cctvSelect
+  const frame = byId('cctv-grid').querySelector<HTMLElement>(`[data-cctv-frame="${index}"]`)
+  const label = `${cctvData?.youtube[Number(index)]?.city ?? ''} ${select.selectedOptions[0]?.textContent ?? ''}`
+  if (frame) frame.innerHTML = cctvPlayer(select.value, label)
+})
+
 byId('priority-rows').addEventListener('click', (event) => {
   const row = (event.target as HTMLElement).closest<HTMLTableRowElement>('tr[data-cluster]')
   const cluster = row && priorityClusters[Number(row.dataset.cluster)]
@@ -810,3 +890,4 @@ new ResizeObserver(() => map.invalidateSize()).observe(byId('fire-map'))
 syncControls()
 void refreshData()
 void loadBnpb()
+void loadCctv()
