@@ -46,11 +46,12 @@ Situs publik berjalan di server aplikasi `10.129.90.36` (IP publik `103.138.205.
 - sertifikat Let's Encrypt diterbitkan dan diperpanjang oleh certbot di server itu.
 
 ```bash
-npm run deploy                  # kirim kode, build image di server, ganti container
+npm run deploy                  # push ke GitHub, git pull di server, build image, ganti container
+PESAN="fix: ..." npm run deploy # sekaligus git add + commit bila masih ada perubahan
 bash scripts/enable-https.sh    # sekali saja: sertifikat + konfigurasi HTTPS (butuh DNS A amukapi -> 103.138.205.33)
 ```
 
-Kredensial SSH dibaca dari `secrets/server.txt` (tidak di-commit). Server hanya menerima `FIRMS_MAP_KEY` di `~/pemantau-karhutla/.env`.
+Deploy selalu lewat git: perubahan harus di-commit dan di-push, server menjalankan `git pull --ff-only` dan memastikan commit-nya sama dengan lokal. Kredensial SSH dibaca dari `secrets/server.txt` (tidak di-commit). Server hanya menerima `FIRMS_MAP_KEY` di `~/pemantau-karhutla/.env`.
 
 ## Produksi dengan Podman
 
