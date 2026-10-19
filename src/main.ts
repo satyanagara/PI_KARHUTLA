@@ -1,7 +1,7 @@
 import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, levelRank, type Cluster, type IspuLevel } from './risk.ts'
+import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, ispuLevel, levelRank, type Cluster, type IspuLevel } from './risk.ts'
 import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
 const sourceNames: Record<Source, string> = {
@@ -786,6 +786,29 @@ async function runCheck(lat: number, lon: number, label: string) {
   }
 }
 
+// Menjelaskan dari mana status kualitas udara berasal, agar status dari model (sering polusi perkotaan)
+// tidak terbaca sebagai asap kebakaran.
+function statusReason(result: LocationCheck) {
+  const air = result.air
+  const plume = result.smoke[0]
+  const bmkgHaze = Boolean(result.bmkg && (isHazeText(result.bmkg.now.description) || result.bmkg.hazeNext24.length))
+  const fireNear = Boolean(result.nearestFire && result.nearestFire.km <= 10)
+  const points: string[] = []
+  const fromPlume = plume && (!air || levelRank(plume.level.key) >= levelRank(air.level.key))
+  if (fromPlume) {
+    points.push(`Status berasal dari <b>asap wilayah api ${formatKm(plume.fireKm)} di arah ${plume.fireDirection}</b>${plume.place ? ` (dekat ${escapeHtml(plume.place)})` : ''}, kategori ${plume.level.label.toLowerCase()}.`)
+  } else if (air) {
+    const nowLevel = ispuLevel(air.pm25Now)
+    points.push(`Status berasal dari <b>perkiraan model kualitas udara</b> (CAMS, resolusi ±40 km): PM2.5 rata-rata 24 jam ${formatPm(air.pm25Mean24)}${air.pm25Now !== null ? `; saat ini ${formatPm(air.pm25Now)} (setara ${nowLevel.label.toLowerCase()})` : ''}. Ini perkiraan, bukan hasil alat ukur.`)
+    if (!plume && !bmkgHaze && !fireNear && levelRank(result.level.key) >= levelRank('sedang')) {
+      points.push('Lokasi ini <b>tidak di jalur asap</b>, tidak ada titik api dalam 10 km, dan BMKG tidak memprakirakan kabut/asap. Kemungkinan besar ini <b>polusi perkotaan atau regional</b> (kendaraan, industri, pembakaran sampah), bukan asap kebakaran.')
+    }
+  }
+  if (bmkgHaze) points.push('BMKG juga memprakirakan kabut/asap di desa ini, sejalan dengan status di atas.')
+  if (!points.length) return ''
+  return `<div class="check-reason"><strong>Kenapa statusnya begini?</strong><ul>${points.map((point) => `<li>${point}</li>`).join('')}</ul></div>`
+}
+
 function renderCheck(result: LocationCheck, lat: number, lon: number, label: string) {
   const period = result.days === 1 ? '24 jam terakhir' : `${result.days} hari terakhir`
   const fire = result.nearestFire
@@ -806,10 +829,12 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
     lines.push(`Perkiraan PM2.5 rata-rata 24 jam: <b>${formatPm(result.air.pm25Mean24)}</b>, puncak 24 jam ke depan ${formatPm(result.air.pm25Max24)}. Angin ${result.air.windKmh.toFixed(0)} km/jam ke ${compassName((result.air.windFrom + 180) % 360)}.`)
   }
   const place = result.place ? `${result.place.name}${result.place.province ? `, ${result.place.province}` : ''}` : label
+  const reason = statusReason(result)
   checkResult.innerHTML = `
     <div class="check-summary" style="--level:${result.level.color}">
       <div class="check-head">${levelPill(result.level)}<strong>${escapeHtml(place)}</strong></div>
       <ul>${lines.map((line) => `<li>${line}</li>`).join('')}</ul>
+      ${reason}
       ${result.bmkg ? bmkgBlock(result.bmkg) : ''}
       <p class="check-advice"><b>${ISPU_ADVICE[result.level.key].meaning}</b> ${ISPU_ADVICE[result.level.key].action}</p>
       <button type="button" class="check-map" id="check-map">Lihat di peta ↗</button>

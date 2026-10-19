@@ -1057,6 +1057,27 @@ h1 span {
   color: var(--fire);
 }
 
+.check-reason {
+  padding: 10px 12px;
+  border-left: 3px solid var(--level);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.check-reason strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+}
+
+.check-reason ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .check-bmkg {
   display: flex;
   flex-direction: column;
