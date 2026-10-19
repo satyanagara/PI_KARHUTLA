@@ -770,7 +770,7 @@ const checkInput = byId<HTMLInputElement>('check-input')
 const suggestions = byId<HTMLUListElement>('check-suggestions')
 const checkResult = byId('check-result')
 const locationLayer = L.layerGroup().addTo(map)
-let suggestionItems: { name: string; province: string; lat: number; lon: number }[] = []
+let suggestionItems: { name: string; label: string; province: string; lat: number; lon: number }[] = []
 let searchTimer = 0
 
 async function runCheck(lat: number, lon: number, label: string) {
@@ -834,7 +834,7 @@ checkInput.addEventListener('input', () => {
     const response = await fetch(`/api/cari?q=${encodeURIComponent(query)}`).catch(() => null)
     suggestionItems = response?.ok ? await response.json() : []
     suggestions.innerHTML = suggestionItems.length
-      ? suggestionItems.map((item, index) => `<li><button type="button" data-place="${index}"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.province)}</small></button></li>`).join('')
+      ? suggestionItems.map((item, index) => `<li><button type="button" data-place="${index}"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.label ?? item.province)}</small></button></li>`).join('')
       : '<li class="check-none">Nama tidak ditemukan.</li>'
     suggestions.hidden = false
   }, 250)

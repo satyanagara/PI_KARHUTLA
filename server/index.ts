@@ -9,7 +9,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib'
 import { DAY_OPTIONS, DEFAULT_SOURCE, SOURCES, type Source } from '../src/report-types.ts'
-import { forecastNear, loadVillages } from './bmkg.ts'
+import { forecastNear } from './bmkg.ts'
+import { loadWilayah } from './wilayah.ts'
 import { getBnpbReport } from './bnpb.ts'
 import { getCctv } from './cctv.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
@@ -262,8 +263,8 @@ const server = createServer(async (req, res) => {
 })
 
 const counts = await loadReference(DATA)
-const villageCount = await loadVillages(DATA)
-console.log(`[server] kode desa BMKG: ${villageCount}`)
+const wilayah = await loadWilayah(DATA)
+console.log(`[server] wilayah Kemendagri: ${wilayah.villages} desa/kelurahan, ${wilayah.areas} kecamatan & kabupaten/kota`)
 console.log(`[server] data rujukan: ${counts.settlements} permukiman, ${counts.areas} poligon kawasan hutan, ${counts.peat} KHG, ${counts.regencies} kabupaten/kota`)
 if (!process.env.FIRMS_MAP_KEY) console.warn('[server] PERINGATAN: FIRMS_MAP_KEY belum diatur, /api/hotspots akan gagal.')
 server.listen(PORT, HOST, () => console.log(`[server] berjalan di http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))

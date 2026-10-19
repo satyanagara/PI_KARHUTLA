@@ -622,8 +622,8 @@ h1 span {
 
 .check-suggestions button {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 1px;
   width: 100%;
   padding: 9px 10px;
   border: 0;

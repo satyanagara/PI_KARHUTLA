@@ -1,63 +1,13 @@
 // Prakiraan cuaca BMKG per desa (https://data.bmkg.go.id/prakiraan-cuaca/).
 // Ketentuan BMKG: wajib mencantumkan BMKG sebagai sumber, batas 60 permintaan per menit per IP, data diperbarui
 // 2 kali sehari. Karena itu permintaan diantrekan (±1 per 1,1 detik) dan hasilnya di-cache 3 jam per desa.
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
-import { distanceKm } from '../src/risk.ts'
+import { nearestVillage } from './wilayah.ts'
 import type { BmkgForecast } from '../src/report-types.ts'
 
 const API = 'https://api.bmkg.go.id/publik/prakiraan-cuaca'
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000
 const MIN_INTERVAL_MS = 1100
-const VILLAGE_CELL = 0.05
-const MAX_VILLAGE_KM = 15
 const HAZE = /asap|kabur|haze|smoke/i
-
-type Village = { code: string; name: string; lat: number; lon: number }
-
-// ---------- Indeks desa (kode Kemendagri + titik tengah) ----------
-
-let villages: Village[] = []
-const grid = new Map<string, number[]>()
-const cellKey = (row: number, col: number) => `${row}:${col}`
-
-export async function loadVillages(dataDir: string) {
-  const text = await readFile(path.join(dataDir, 'desa.txt'), 'utf8')
-  villages = []
-  grid.clear()
-  for (const line of text.split('\n')) {
-    const [code, name, lat, lon] = line.split('|')
-    if (!code || !lat) continue
-    const village = { code, name, lat: Number(lat) / 1e5, lon: Number(lon) / 1e5 }
-    const key = cellKey(Math.floor(village.lat / VILLAGE_CELL), Math.floor(village.lon / VILLAGE_CELL))
-    const bucket = grid.get(key)
-    if (bucket) bucket.push(villages.length)
-    else grid.set(key, [villages.length])
-    villages.push(village)
-  }
-  return villages.length
-}
-
-function nearestVillage(lat: number, lon: number): Village | null {
-  const rings = Math.ceil(MAX_VILLAGE_KM / (111 * VILLAGE_CELL))
-  const row = Math.floor(lat / VILLAGE_CELL)
-  const col = Math.floor(lon / VILLAGE_CELL)
-  let best: Village | null = null
-  let bestKm = MAX_VILLAGE_KM
-  for (let dr = -rings; dr <= rings; dr++) {
-    for (let dc = -rings; dc <= rings; dc++) {
-      for (const index of grid.get(cellKey(row + dr, col + dc)) ?? []) {
-        const village = villages[index]
-        const km = distanceKm(lat, lon, village.lat, village.lon)
-        if (km < bestKm) {
-          best = village
-          bestKm = km
-        }
-      }
-    }
-  }
-  return best
-}
 
 // ---------- Antrean permintaan & cache ----------
 

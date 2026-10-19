@@ -12,6 +12,7 @@ import {
   bearing,
   compassName,
   distanceKm,
+  foldSpelling,
   inPlume,
   ispuLevel,
   levelRank,
@@ -21,6 +22,7 @@ import {
   type SmokeReading,
 } from '../src/risk.ts'
 import { forecastNear } from './bmkg.ts'
+import { nearestVillage, searchWilayah } from './wilayah.ts'
 import { FLAG_STATIONARY, type AreaRank, type ExposedTown, type LocationCheck, type Report, type ReportFire, type Source } from '../src/report-types.ts'
 
 const REPORT_TTL_MS = 10 * 60 * 1000
@@ -491,15 +493,34 @@ export function cacheStatus() {
 
 // ---------- Cek lokasi warga ----------
 
+// Pencarian nama daerah: wilayah resmi Kemendagri lebih dulu; GeoNames hanya untuk nama yang tidak ada di sana
+// (dusun/kampung), karena koordinat GeoNames kadang meleset belasan kilometer.
 export function searchPlaces(query: string) {
-  if (!reference) return []
-  return reference.settlements.search(query).map(({ name, province, lat, lon, rank }) => ({ name, province, lat, lon, rank }))
+  const official = searchWilayah(query, 8).map(({ name, label, province, lat, lon, level }) => ({ name, label, province, lat, lon, level }))
+  if (!reference) return official
+  const compact = (text: string) => foldSpelling(text.replace(/^(kabupaten|kota)\s+/i, ''))
+  // Sama dengan wilayah resmi bila namanya serupa dan letaknya berdekatan (≤15 km).
+  const duplicate = (item: { name: string; lat: number; lon: number }) => official.some((place) =>
+    distanceKm(place.lat, place.lon, item.lat, item.lon) <= 15
+    && (compact(place.name).startsWith(compact(item.name)) || compact(item.name).startsWith(compact(place.name))))
+  const geonames = reference.settlements.search(query, 8).filter((item) => !duplicate(item))
+  const label = (item: { name: string; province: string }) => `${item.name}, ${item.province} (GeoNames)`
+  // Kota/kecamatan terkenal dari GeoNames (mis. Sampit) diletakkan setelah kabupaten/kecamatan resmi, sebelum desa.
+  const isTown = (item: { rank: number; population: number }) => item.rank >= 2 || item.population >= 20000
+  const officialNames = new Set(official.map((place) => compact(place.name)))
+  const towns = geonames.filter(isTown).map((item) => ({ name: item.name, label: label(item), province: item.province, lat: item.lat, lon: item.lon, level: 1 }))
+  // Dusun GeoNames yang namanya sudah ada di data resmi disembunyikan (koordinatnya bisa meleset jauh).
+  const hamlets = geonames.filter((item) => !isTown(item) && !officialNames.has(compact(item.name))).map((item) => ({ name: item.name, label: label(item), province: item.province, lat: item.lat, lon: item.lon, level: 5 }))
+  const areas = official.filter((place) => place.level <= 3)
+  const villagesFound = official.filter((place) => place.level === 4)
+  return [...areas, ...towns, ...villagesFound, ...hamlets].slice(0, 8)
 }
 
 export async function checkLocation(lat: number, lon: number, source: Source, days: number): Promise<LocationCheck> {
   if (!reference) throw new Error('Data rujukan belum dimuat.')
   const { report } = await getReport(source, days)
   const place = reference.settlements.nearest(lat, lon, 15)
+  const village = nearestVillage(lat, lon, 15)
 
   let nearest: ReportFire | null = null
   let nearestKm = Infinity
@@ -557,7 +578,9 @@ export async function checkLocation(lat: number, lon: number, source: Source, da
   const level = candidates.sort((a, b) => levelRank(b.key) - levelRank(a.key))[0] ?? ispuLevel(null)
 
   return {
-    place: place.settlement ? { name: place.settlement.name, province: place.settlement.province, km: round(place.km, 1) } : null,
+    place: village
+      ? { name: village.label.split(', ').slice(0, -1).join(', '), province: village.province, km: round(village.km, 1) }
+      : place.settlement ? { name: place.settlement.name, province: place.settlement.province, km: round(place.km, 1) } : null,
     nearestFire: nearest ? {
       km: round(nearestKm, 1),
       direction: compassName(bearing(lat, lon, nearest[0], nearest[1])),

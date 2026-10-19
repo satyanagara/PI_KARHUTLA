@@ -102,6 +102,12 @@ export function ispuLevel(pm25: number | null): IspuLevel {
 
 // ---------- Permukiman ----------
 
+// Menyamakan ejaan untuk pencarian: ejaan lama (oe, dj, tj) dan huruf ganda ("Pangkalanbuun" = "Pangkalan Bun").
+export function foldSpelling(text: string) {
+  return text.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/oe/g, 'u').replace(/dj/g, 'j').replace(/tj/g, 'c').replace(/[^a-z0-9]/g, '').replace(/(.)\1+/g, '$1')
+}
+
 const SETTLEMENT_CELL = 0.05
 
 export class SettlementIndex {
@@ -145,16 +151,16 @@ export class SettlementIndex {
   // agar "Palangka Raya" cocok dengan "Palangkaraya".
   search(query: string, limit = 8) {
     const needle = query.trim().toLowerCase()
-    const compact = needle.replace(/\s+/g, '')
+    const compact = foldSpelling(needle)
     if (compact.length < 2) return []
     const scored: { item: Settlement; score: number }[] = []
     for (const item of this.items) {
       const name = item.name.toLowerCase()
       const at = name.indexOf(needle)
       const wordStart = at === 0 || (at > 0 && name[at - 1] === ' ')
-      const compactStart = name.replace(/\s+/g, '').startsWith(compact)
+      const compactStart = foldSpelling(name).startsWith(compact)
       if (!wordStart && !compactStart) continue
-      const exact = name === needle || name.replace(/\s+/g, '') === compact
+      const exact = name === needle || foldSpelling(name) === compact
       const score = item.rank * 300 + (exact ? 150 : 0) + (at === 0 || compactStart ? 100 : 0) + Math.log10(1 + item.population) * 10 - name.length
       scored.push({ item, score })
     }

@@ -21,7 +21,7 @@ API publik (JSON):
 | Endpoint | Isi |
 |---|---|
 | `GET /api/hotspots?source=&days=` | Laporan lengkap: titik panas, kluster, asap, ringkasan |
-| `GET /api/cari?q=` | Cari nama kota/desa |
+| `GET /api/cari?q=` | Cari kabupaten/kota, kecamatan, atau desa (data Kemendagri; boleh ditambah nama kecamatan/kabupaten, mis. `Situmandala, Kab. Ciamis`) |
 | `GET /api/lokasi?lat=&lon=&source=&days=` | Risiko di satu titik |
 | `GET /api/laporan-bnpb` | Laporan lapangan BNPB |
 | `GET /api/bmkg?lat=&lon=` | Prakiraan cuaca BMKG untuk desa terdekat (sumber: BMKG) |
@@ -111,7 +111,8 @@ Berkas di `data/` dibaca server saat start; bangun ulang dengan `npm run data` (
 | `kawasan-hutan.json` / `-web.json` | Kawasan konservasi (TN, CA, SM, TWA, Tahura, TB, KSA/KPA) dan hutan lindung | IGT Kawasan Hutan 1:250.000 status Juni 2026, SIGAP Kementerian Kehutanan |
 | `gambut.json` / `gambut-web.json` | 865 Kesatuan Hidrologis Gambut | KHG 1:250.000, SIGAP Kementerian Kehutanan |
 | `provinsi.json` / `kabupaten.json` | Batas provinsi dan kabupaten/kota | SiPongi, Kementerian Kehutanan |
-| `desa.txt` | 83.540 kode desa Kemendagri (adm4) dengan titik tengah, untuk API BMKG | [cahyadsn/wilayah_boundaries](https://github.com/cahyadsn/wilayah_boundaries), MIT ([lisensi](data/LICENSE-wilayah-boundaries.txt)) |
+| `desa.txt` | 83.540 kode desa Kemendagri (adm4) dengan titik tengah, untuk pencarian daerah dan API BMKG | [cahyadsn/wilayah_boundaries](https://github.com/cahyadsn/wilayah_boundaries), MIT ([lisensi](data/LICENSE-wilayah-boundaries.txt)) |
+| `wilayah.txt` | Nama provinsi, kabupaten/kota, dan kecamatan menurut kode Kemendagri | [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah), MIT ([lisensi](data/LICENSE-wilayah.txt)) |
 
 Data pemerintah tidak mencantumkan lisensi pada metadatanya; sumbernya disebut pada atribusi.
 
