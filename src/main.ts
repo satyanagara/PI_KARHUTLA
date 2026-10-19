@@ -2,9 +2,10 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, levelRank, type Cluster, type IspuLevel } from './risk.ts'
-import { DAY_OPTIONS, FLAG_STATIONARY, SOURCES, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
+import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
 const sourceNames: Record<Source, string> = {
+  VIIRS_ALL: 'Gabungan VIIRS · 3 satelit NASA',
   VIIRS_NOAA21_NRT: 'NOAA-21 · VIIRS 375 m',
   VIIRS_NOAA20_NRT: 'NOAA-20 · VIIRS 375 m',
   VIIRS_SNPP_NRT: 'Suomi-NPP · VIIRS 375 m',
@@ -15,7 +16,7 @@ const AUTO_REFRESH_MS = 10 * 60 * 1000
 
 // Pilihan sumber & periode dibaca dari URL agar tautan bisa dibagikan.
 const params = new URLSearchParams(location.search)
-let activeSource: Source = SOURCES.includes(params.get('sumber') as Source) ? (params.get('sumber') as Source) : 'VIIRS_NOAA21_NRT'
+let activeSource: Source = SOURCES.includes(params.get('sumber') as Source) ? (params.get('sumber') as Source) : DEFAULT_SOURCE
 let activeDays: number = (DAY_OPTIONS as readonly number[]).includes(Number(params.get('hari'))) ? Number(params.get('hari')) : 3
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -207,7 +208,7 @@ app.innerHTML = `
           <div class="section-kicker">METODOLOGI &amp; SUMBER DATA</div>
           <h2>Cara membaca halaman ini</h2>
           <div class="about-grid">
-            <div><h3>Titik panas</h3><p>Deteksi anomali termal satelit VIIRS (375 m) dari <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS</a>, atau data resmi BRIN/LAPAN (keyakinan sedang dan tinggi) dari <a href="https://sipongi.kehutanan.go.id/" target="_blank" rel="noreferrer">SiPongi</a>. Hanya titik di wilayah Indonesia yang dihitung. Data diperbarui di server setiap 10 menit.</p></div>
+            <div><h3>Titik panas</h3><p>Deteksi anomali termal satelit VIIRS (375 m) dari <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS</a>. Bawaannya gabungan ketiga satelit (NOAA-21, NOAA-20, Suomi-NPP) karena satu satelit saja bisa melewatkan api akibat awan atau jam lintas; deteksi ganda atas api yang sama digabung. Tersedia juga per satelit, atau data resmi BRIN/LAPAN (keyakinan sedang dan tinggi) dari <a href="https://sipongi.kehutanan.go.id/" target="_blank" rel="noreferrer">SiPongi</a>. Hanya titik di wilayah Indonesia yang dihitung. Data diperbarui di server setiap 10 menit.</p></div>
             <div><h3>Laporan lapangan</h3><p>Firespot, luas lahan terbakar, jarak pandang bandara, dan kesimpulan Satgas berasal dari <a href="https://data.bnpb.go.id/data/karhutla2026" target="_blank" rel="noreferrer">Dashboard Karhutla BNPB</a>, diperbarui setiap 15 menit.</p></div>
             <div><h3>Kedekatan</h3><p>Jarak tiap titik ke permukiman terdekat (<a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames</a>, ±257 ribu desa/kota) dan ke batas kawasan konservasi atau hutan lindung menurut peta resmi Kawasan Hutan 1:250.000 status Juni 2026, serta apakah titik berada di Kesatuan Hidrologis Gambut. Keduanya dari <a href="https://sigap.kehutanan.go.id/" target="_blank" rel="noreferrer">SIGAP Kementerian Kehutanan</a>.</p></div>
             <div><h3>Asap &amp; ISPU</h3><p>Titik dikelompokkan per ±20 km. Untuk 30 kluster teratas, angin dan PM2.5 diambil dari <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (model CAMS). Kategori mengikuti ISPU PM2.5 rata-rata 24 jam (PermenLHK P.14/2020). Jalur asap adalah kerucut 6 jam searah angin.</p></div>

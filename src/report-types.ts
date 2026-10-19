@@ -1,8 +1,10 @@
 // Bentuk respons /api/hotspots, dipakai bersama oleh server dan halaman web.
 import type { AreaKind, Cluster, IspuLevel } from './risk.ts'
 
+// VIIRS_ALL: gabungan ketiga satelit VIIRS NASA (bawaan; satu satelit saja bisa melewatkan api karena awan atau jam lintas).
 // BRIN_LAPAN: hotspot resmi pemerintah (satelit SNPP & NOAA-20 olahan BRIN/LAPAN) dari SiPongi Kementerian Kehutanan.
-export const SOURCES = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT', 'BRIN_LAPAN'] as const
+export const SOURCES = ['VIIRS_ALL', 'VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT', 'BRIN_LAPAN'] as const
+export const DEFAULT_SOURCE = 'VIIRS_ALL'
 export const DAY_OPTIONS = [1, 3, 5] as const
 export type Source = (typeof SOURCES)[number]
 

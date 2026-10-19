@@ -23,6 +23,8 @@ import {
 import { FLAG_STATIONARY, type AreaRank, type ExposedTown, type LocationCheck, type Report, type ReportFire, type Source } from '../src/report-types.ts'
 
 const REPORT_TTL_MS = 10 * 60 * 1000
+// Laporan kedaluwarsa masih boleh dikirim sambil diperbarui, tetapi tidak lebih tua dari ini.
+const REPORT_STALE_MAX_MS = 30 * 60 * 1000
 const SMOKE_TTL_MS = 30 * 60 * 1000
 const SMOKE_CLUSTERS = 30
 const PRIORITY_CLUSTERS = 30
@@ -178,6 +180,41 @@ type History = Map<string, Set<string>>
 const histories = new Map<'NASA' | 'BRIN_LAPAN', { at: number; history: Promise<History> }>()
 const NASA_SOURCES: Source[] = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT']
 
+// Gabungan ketiga satelit VIIRS. Api yang sama sering terekam oleh lebih dari satu satelit dalam satu lintasan
+// siang/malam dengan posisi piksel bergeser beberapa ratus meter. Deteksi dari satelit LAIN pada tanggal dan
+// siang/malam yang sama di sel ±440 m yang sama atau bertetangga dianggap api yang sama (diambil FRP tertinggi).
+// Deteksi dari satelit yang sama tidak digabung, karena itu memang piksel api yang berbeda.
+async function fetchAllViirs(days: number): Promise<Fire[]> {
+  const sets = await Promise.all(NASA_SOURCES.map((item) => fetchFirms(item, days)))
+  const kept: Fire[] = []
+  const index = new Map<string, { at: number; satellite: string }[]>()
+  sets.forEach((rows, satellite) => {
+    for (const fire of rows) {
+      const lat = Number(fire.latitude)
+      const lon = Number(fire.longitude)
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
+      const row = Math.floor(lat / PERSIST_CELL)
+      const col = Math.floor(lon / PERSIST_CELL)
+      const stamp = `${fire.acq_date}:${fire.daynight}`
+      let match: { at: number; satellite: string } | undefined
+      for (let dr = -1; dr <= 1 && !match; dr++) {
+        for (let dc = -1; dc <= 1 && !match; dc++) {
+          match = index.get(`${row + dr}:${col + dc}:${stamp}`)?.find((entry) => entry.satellite !== String(satellite))
+        }
+      }
+      if (match) {
+        if ((Number(fire.frp) || 0) > (Number(kept[match.at].frp) || 0)) kept[match.at] = fire
+        continue
+      }
+      const key = `${row}:${col}:${stamp}`
+      const list = index.get(key) ?? []
+      list.push({ at: kept.push(fire) - 1, satellite: String(satellite) })
+      index.set(key, list)
+    }
+  })
+  return kept
+}
+
 function buildHistory(rows: Fire[]): History {
   const history: History = new Map()
   for (const fire of rows) {
@@ -220,7 +257,8 @@ async function buildReport(source: Source, days: number): Promise<Report> {
   const { settlements, areas, peat, regencies, provinces, regencyProvince } = reference
   const official = source === 'BRIN_LAPAN'
   // FIRMS day_range=1 hanya berisi tanggal UTC hari ini, jadi 24 jam diambil dari 2 hari lalu disaring.
-  const raw = official ? await fetchSipongi(days) : await fetchFirms(source, days === 1 ? 2 : days)
+  const fetchDays = days === 1 ? 2 : days
+  const raw = official ? await fetchSipongi(days) : source === 'VIIRS_ALL' ? await fetchAllViirs(fetchDays) : await fetchFirms(source, fetchDays)
   const fetchedAt = new Date()
   const cutoff = fetchedAt.getTime() - 24 * 3600 * 1000
   const rows = days === 1 && !official ? raw.filter((fire) => {
@@ -430,11 +468,20 @@ export async function getReport(source: Source, days: number): Promise<CachedRep
       .finally(() => inflight.delete(key))
     inflight.set(key, pending)
   }
-  if (hit) {
+  if (hit && Date.now() - hit.at < REPORT_STALE_MAX_MS) {
     pending.catch((error) => console.error(`[report] gagal memperbarui ${key}:`, error.message))
     return hit
   }
-  return pending
+  // Laporan terlalu lama: tunggu data baru; bila sumber gagal, laporan lama masih lebih baik daripada galat.
+  try {
+    return await pending
+  } catch (error) {
+    if (hit) {
+      console.error(`[report] memakai laporan lama ${key}:`, error instanceof Error ? error.message : error)
+      return hit
+    }
+    throw error
+  }
 }
 
 export function cacheStatus() {

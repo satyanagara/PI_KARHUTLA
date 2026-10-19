@@ -8,7 +8,7 @@ import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib'
-import { DAY_OPTIONS, SOURCES, type Source } from '../src/report-types.ts'
+import { DAY_OPTIONS, DEFAULT_SOURCE, SOURCES, type Source } from '../src/report-types.ts'
 import { getBnpbReport } from './bnpb.ts'
 import { getCctv } from './cctv.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
@@ -133,7 +133,7 @@ function allowed(req: IncomingMessage, res: ServerResponse) {
 const reportPayloads = new Map<string, { at: number; payload: Payload }>()
 
 async function handleHotspots(req: IncomingMessage, res: ServerResponse, url: URL) {
-  const source = (url.searchParams.get('source') ?? 'VIIRS_NOAA21_NRT') as Source
+  const source = (url.searchParams.get('source') ?? DEFAULT_SOURCE) as Source
   const days = Number(url.searchParams.get('days') ?? 3)
   if (!SOURCES.includes(source)) return sendError(res, 400, 'Sumber satelit tidak didukung.')
   if (!(DAY_OPTIONS as readonly number[]).includes(days)) return sendError(res, 400, 'Rentang hari tidak valid.')
@@ -157,7 +157,7 @@ function sendJson(req: IncomingMessage, res: ServerResponse, body: unknown, cach
 }
 
 function readFilters(url: URL) {
-  const source = (url.searchParams.get('source') ?? 'VIIRS_NOAA21_NRT') as Source
+  const source = (url.searchParams.get('source') ?? DEFAULT_SOURCE) as Source
   const days = Number(url.searchParams.get('days') ?? 3)
   const valid = SOURCES.includes(source) && (DAY_OPTIONS as readonly number[]).includes(days)
   return valid ? { source, days } : null
