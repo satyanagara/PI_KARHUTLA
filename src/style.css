@@ -1057,6 +1057,53 @@ h1 span {
   color: var(--fire);
 }
 
+.check-bmkg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eef3f8;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.check-bmkg.haze {
+  background: #f3eee8;
+}
+
+.check-bmkg strong {
+  color: var(--ink);
+}
+
+.check-bmkg small,
+.town-bmkg {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.town-bmkg {
+  grid-column: 1 / -1;
+}
+
+.town-bmkg:empty {
+  display: none;
+}
+
+.town-bmkg.haze {
+  font-weight: 600;
+  color: #8a5a2b;
+}
+
+.bmkg-section {
+  scroll-margin-top: 80px;
+}
+
+.bmkg-section .panel-intro a {
+  color: var(--fire);
+}
+
 /* ---------- Statistik ---------- */
 
 .stats-grid {

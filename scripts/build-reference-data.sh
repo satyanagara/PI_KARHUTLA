@@ -4,6 +4,7 @@
 #   kawasan-hutan.json / -web.json       kawasan konservasi & hutan lindung, IGT Kawasan Hutan 1:250.000
 #   gambut.json / gambut-web.json        Kesatuan Hidrologis Gambut (KHG) 1:250.000
 #   provinsi.json / kabupaten.json       batas wilayah (SiPongi, Kementerian Kehutanan); provinsi = penyaring wilayah RI
+#   desa.txt                             kode desa Kemendagri + titik tengah (cahyadsn/wilayah_boundaries, MIT) untuk API BMKG
 # Kawasan hutan dan KHG bersumber dari SIGAP Kementerian Kehutanan (Ditjen Planologi Kehutanan).
 # Butuh: curl, unzip, python3, npx (mapshaper diunduh otomatis). Unduhan SIGAP ±860 MB.
 set -euo pipefail
@@ -50,6 +51,10 @@ for LEVEL in provinsi kabupaten; do
   curl -sSf --compressed --max-time 300 -A "$UA" -o "$WORK/$LEVEL.geojson" "https://opsroom-sipongi.gakkum.kehutanan.go.id/api/boundaries?level=$LEVEL"
   python3 -I "$ROOT/scripts/normalize_wilayah.py" "$LEVEL" "$WORK/$LEVEL.geojson" "$OUT/$LEVEL.json"
 done
+
+echo "Mengunduh kode desa Kemendagri + titik tengah (cahyadsn/wilayah_boundaries, MIT)..."
+python3 -I "$ROOT/scripts/build_desa.py" "$OUT/desa.txt"
+curl -sSf -o "$OUT/LICENSE-wilayah-boundaries.txt" https://raw.githubusercontent.com/cahyadsn/wilayah_boundaries/main/LICENSE
 
 # Buang fitur yang geometrinya hilang karena terlalu kecil setelah penyederhanaan.
 drop_empty() {

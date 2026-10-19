@@ -53,6 +53,7 @@ export type LocationCheck = {
   nearestFire: { km: number; direction: string; frp: number; date: string; time: string; settlement: string | null; confidence: string } | null
   // Sumber panas tetap terdekat (≤ 25 km) yang tidak dihitung sebagai kebakaran.
   stationary: { km: number; direction: string; settlement: string | null } | null
+  bmkg: BmkgForecast | null
   counts: { km5: number; km10: number; km25: number }
   smoke: { level: IspuLevel; fireKm: number; fireDirection: string; place: string | null }[]
   air: { pm25Mean24: number | null; pm25Now: number | null; pm25Max24: number | null; windKmh: number; windFrom: number; level: IspuLevel } | null
@@ -105,4 +106,17 @@ export type CctvReport = {
   fetchedAt: string
   youtube: { city: string; province: string; operator: string; channelUrl: string; streams: { id: string; location: string }[] }[]
   portals: { city: string; province: string; operator: string; url: string; note: string }[]
+}
+
+// Prakiraan cuaca BMKG untuk satu desa (sumber wajib dicantumkan: BMKG).
+export type BmkgForecast = {
+  code: string
+  village: string
+  district: string
+  regency: string
+  province: string
+  now: { time: string; description: string; temperature: number; humidity: number; windKmh: number; windFrom: number; visibility: string | null }
+  // Langkah 3 jam dalam 24 jam ke depan yang diprakirakan berasap atau udara kabur.
+  hazeNext24: { time: string; description: string }[]
+  fetchedAt: string
 }

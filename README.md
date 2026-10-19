@@ -12,6 +12,7 @@ Situs publik untuk memantau kebakaran hutan dan lahan (karhutla) di Indonesia: t
 - **Perkiraan jalur dan tingkat bahaya asap**: arah angin dan PM2.5 model CAMS (Open-Meteo), kategori ISPU.
 - **Kedekatan api** ke ±257 ribu permukiman, ke kawasan konservasi dan hutan lindung (peta resmi Kawasan Hutan Kementerian Kehutanan), serta ke lahan gambut (KHG).
 - **Untuk warga**: status risiko dalam bahasa sederhana beserta anjuran kesehatan, cek lokasi (cari nama daerah atau pakai lokasi perangkat), dan daftar kota di jalur asap.
+- **Prakiraan cuaca BMKG per desa** (kondisi termasuk "Kabut/Asap" dan "Udara Kabur", angin, suhu, kelembapan, jarak pandang) di cek lokasi dan daftar kota di jalur asap, serta tautan ke data resmi BMKG lainnya.
 - **Laporan lapangan Satgas Karhutla BNPB** per provinsi prioritas.
 - **Ringkasan per kabupaten/kota**, daftar wilayah api prioritas, dan unduhan CSV.
 
@@ -23,6 +24,8 @@ API publik (JSON):
 | `GET /api/cari?q=` | Cari nama kota/desa |
 | `GET /api/lokasi?lat=&lon=&source=&days=` | Risiko di satu titik |
 | `GET /api/laporan-bnpb` | Laporan lapangan BNPB |
+| `GET /api/bmkg?lat=&lon=` | Prakiraan cuaca BMKG untuk desa terdekat (sumber: BMKG) |
+| `GET /api/cctv` | Daftar CCTV kota yang terbuka untuk publik |
 
 `source`: `VIIRS_NOAA21_NRT`, `VIIRS_NOAA20_NRT`, `VIIRS_SNPP_NRT`, atau `BRIN_LAPAN`. `days`: `1`, `3`, atau `5`.
 
@@ -31,6 +34,7 @@ API publik (JSON):
 ```
 browser ──► server Node (server/index.ts) ──► NASA FIRMS / SiPongi (hotspot)
                  │                          ├► Open-Meteo (angin & PM2.5)
+                 │                          ├► BMKG (prakiraan cuaca per desa, antrean ≤1 permintaan/detik)
                  │                          └► BNPB (laporan lapangan)
                  ├─ /api/*                   analisis siap pakai, di-cache di server
                  ├─ /data/*.json             batas kawasan hutan & KHG untuk lapisan peta
@@ -107,6 +111,7 @@ Berkas di `data/` dibaca server saat start; bangun ulang dengan `npm run data` (
 | `kawasan-hutan.json` / `-web.json` | Kawasan konservasi (TN, CA, SM, TWA, Tahura, TB, KSA/KPA) dan hutan lindung | IGT Kawasan Hutan 1:250.000 status Juni 2026, SIGAP Kementerian Kehutanan |
 | `gambut.json` / `gambut-web.json` | 865 Kesatuan Hidrologis Gambut | KHG 1:250.000, SIGAP Kementerian Kehutanan |
 | `provinsi.json` / `kabupaten.json` | Batas provinsi dan kabupaten/kota | SiPongi, Kementerian Kehutanan |
+| `desa.txt` | 83.540 kode desa Kemendagri (adm4) dengan titik tengah, untuk API BMKG | [cahyadsn/wilayah_boundaries](https://github.com/cahyadsn/wilayah_boundaries), MIT ([lisensi](data/LICENSE-wilayah-boundaries.txt)) |
 
 Data pemerintah tidak mencantumkan lisensi pada metadatanya; sumbernya disebut pada atribusi.
 
@@ -134,6 +139,6 @@ Kode sumber dirilis di bawah [GNU Affero General Public License v3.0](LICENSE) (
 
 ## Atribusi
 
-Hotspot: NASA FIRMS (VIIRS 375 m), BRIN/LAPAN via SiPongi · Laporan lapangan: BNPB · Kawasan hutan, KHG & batas wilayah: Kementerian Kehutanan · Angin & kualitas udara: Open-Meteo (model CAMS, penggunaan non-komersial) · Permukiman: GeoNames · Peta dasar: Esri World Light Gray Canvas.
+Hotspot: NASA FIRMS (VIIRS 375 m), BRIN/LAPAN via SiPongi · Prakiraan cuaca: BMKG (Badan Meteorologi, Klimatologi, dan Geofisika) · Laporan lapangan: BNPB · Kawasan hutan, KHG & batas wilayah: Kementerian Kehutanan · Angin & kualitas udara: Open-Meteo (model CAMS, penggunaan non-komersial) · Permukiman: GeoNames · Peta dasar: Esri World Light Gray Canvas.
 
 Hotspot adalah indikasi anomali termal, bukan konfirmasi kebakaran. Kualitas udara berasal dari model, bukan alat ukur lapangan. Gunakan sebagai peringatan dini, bukan pengganti informasi resmi.

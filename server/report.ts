@@ -20,6 +20,7 @@ import {
   type FireRisk,
   type SmokeReading,
 } from '../src/risk.ts'
+import { forecastNear } from './bmkg.ts'
 import { FLAG_STATIONARY, type AreaRank, type ExposedTown, type LocationCheck, type Report, type ReportFire, type Source } from '../src/report-types.ts'
 
 const REPORT_TTL_MS = 10 * 60 * 1000
@@ -535,6 +536,14 @@ export async function checkLocation(lat: number, lon: number, source: Source, da
     }))
     .sort((a, b) => levelRank(b.level.key) - levelRank(a.level.key))
 
+  // Prakiraan BMKG ditunggu paling lama 8 detik; bila antrean penuh, hasil tetap dikirim tanpa BMKG.
+  const bmkgPromise = Promise.race([
+    forecastNear(lat, lon),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+  ]).catch((error) => {
+    console.error('[lokasi] prakiraan BMKG gagal:', error instanceof Error ? error.message : error)
+    return null
+  })
   let air: LocationCheck['air'] = null
   try {
     const [reading] = await fetchSmoke([{ lat, lon }])
@@ -542,6 +551,7 @@ export async function checkLocation(lat: number, lon: number, source: Source, da
   } catch (error) {
     console.error('[lokasi] kualitas udara gagal dimuat:', error instanceof Error ? error.message : error)
   }
+  const bmkg = await bmkgPromise
 
   const candidates = [air?.level, ...smoke.map((entry) => entry.level)].filter((level) => level !== undefined)
   const level = candidates.sort((a, b) => levelRank(b.key) - levelRank(a.key))[0] ?? ispuLevel(null)
@@ -565,6 +575,7 @@ export async function checkLocation(lat: number, lon: number, source: Source, da
     counts,
     smoke,
     air,
+    bmkg,
     level,
     source,
     days,

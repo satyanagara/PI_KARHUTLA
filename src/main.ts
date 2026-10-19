@@ -2,7 +2,7 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, levelRank, type Cluster, type IspuLevel } from './risk.ts'
-import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
+import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
 const sourceNames: Record<Source, string> = {
   VIIRS_ALL: 'Gabungan VIIRS · 3 satelit NASA',
@@ -34,6 +34,7 @@ app.innerHTML = `
         <a class="nav-link" href="#map-section"><span class="nav-icon">⌖</span> Peta Hotspot</a>
         <a class="nav-link" href="#risk"><span class="nav-icon">◬</span> Analisis Risiko</a>
         <a class="nav-link" href="#cctv"><span class="nav-icon">◉</span> CCTV Kota</a>
+        <a class="nav-link" href="#bmkg"><span class="nav-icon">☁</span> Data BMKG</a>
         <a class="nav-link" href="#detections"><span class="nav-icon">≋</span> Deteksi Terbaru</a>
         <a class="nav-link" href="#about"><span class="nav-icon">ⓘ</span> Metodologi</a>
       </nav>
@@ -134,7 +135,7 @@ app.innerHTML = `
             <div class="map-layers" aria-label="Lapisan peta"><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-areas" checked /> Kawasan hutan</label><label><input type="checkbox" id="layer-peat" /> Lahan gambut (KHG)</label></div>
             <div class="map-legend"><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
             <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
-            <div class="map-credit">Peta dasar © Esri, HERE, Garmin · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
+            <div class="map-credit">Peta dasar © Esri, HERE, Garmin · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
           </div>
         </section>
 
@@ -184,6 +185,19 @@ app.innerHTML = `
           <ul class="cctv-portals" id="cctv-portals"></ul>
         </section>
 
+        <section class="bmkg-section" id="bmkg">
+          <div class="section-head">
+            <div><div class="section-kicker">SUMBER RESMI</div><h2>Data BMKG</h2></div>
+          </div>
+          <p class="panel-intro">Prakiraan cuaca per desa dari BMKG sudah dipakai di <a href="#cek-lokasi">Cek Lokasi Anda</a> dan daftar kota di jalur asap. Data resmi BMKG lainnya dapat dilihat langsung di situs BMKG:</p>
+          <ul class="cctv-portals bmkg-links">
+            <li><a href="https://www.bmkg.go.id/kualitas-udara/pm25" target="_blank" rel="noreferrer"><strong>Kualitas udara PM2.5</strong><small>Hasil ukur stasiun BMKG</small><span>Konsentrasi PM2.5 per jam dari alat ukur di kota-kota, bukan model.</span><em>Buka di BMKG ↗</em></a></li>
+            <li><a href="https://www.bmkg.go.id/cuaca/karhutla" target="_blank" rel="noreferrer"><strong>Peringkat bahaya kebakaran</strong><small>FWI / FDRS harian per provinsi</small><span>Seberapa mudah api menyala dan menyebar berdasarkan cuaca.</span><em>Buka di BMKG ↗</em></a></li>
+            <li><a href="https://www.bmkg.go.id/cuaca/satelit" target="_blank" rel="noreferrer"><strong>Citra satelit & asap</strong><small>Himawari, sebaran asap, hotspot</small><span>Gambar satelit terbaru, termasuk sebaran asap.</span><em>Buka di BMKG ↗</em></a></li>
+            <li><a href="https://www.bmkg.go.id/cuaca/prakiraan-cuaca" target="_blank" rel="noreferrer"><strong>Prakiraan cuaca</strong><small>Per kecamatan dan desa</small><span>Prakiraan resmi lengkap untuk wilayah Anda.</span><em>Buka di BMKG ↗</em></a></li>
+          </ul>
+        </section>
+
         <section class="lower-grid" id="detections">
           <article class="data-panel detections-panel">
             <div class="panel-heading"><div><div class="section-kicker">FEED NEAR-REAL-TIME</div><h2>Deteksi terbaru</h2></div><span class="result-count" id="result-count">0 TITIK</span></div>
@@ -211,6 +225,7 @@ app.innerHTML = `
             <div><h3>Titik panas</h3><p>Deteksi anomali termal satelit VIIRS (375 m) dari <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS</a>. Bawaannya gabungan ketiga satelit (NOAA-21, NOAA-20, Suomi-NPP) karena satu satelit saja bisa melewatkan api akibat awan atau jam lintas; deteksi ganda atas api yang sama digabung. Tersedia juga per satelit, atau data resmi BRIN/LAPAN (keyakinan sedang dan tinggi) dari <a href="https://sipongi.kehutanan.go.id/" target="_blank" rel="noreferrer">SiPongi</a>. Hanya titik di wilayah Indonesia yang dihitung. Data diperbarui di server setiap 10 menit.</p></div>
             <div><h3>Laporan lapangan</h3><p>Firespot, luas lahan terbakar, jarak pandang bandara, dan kesimpulan Satgas berasal dari <a href="https://data.bnpb.go.id/data/karhutla2026" target="_blank" rel="noreferrer">Dashboard Karhutla BNPB</a>, diperbarui setiap 15 menit.</p></div>
             <div><h3>Kedekatan</h3><p>Jarak tiap titik ke permukiman terdekat (<a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames</a>, ±257 ribu desa/kota) dan ke batas kawasan konservasi atau hutan lindung menurut peta resmi Kawasan Hutan 1:250.000 status Juni 2026, serta apakah titik berada di Kesatuan Hidrologis Gambut. Keduanya dari <a href="https://sigap.kehutanan.go.id/" target="_blank" rel="noreferrer">SIGAP Kementerian Kehutanan</a>.</p></div>
+            <div><h3>Prakiraan BMKG</h3><p>Prakiraan cuaca per desa (kondisi, angin, suhu, kelembapan, jarak pandang, termasuk prakiraan "Kabut/Asap" dan "Udara Kabur") diambil dari <a href="https://data.bmkg.go.id/prakiraan-cuaca/" target="_blank" rel="noreferrer">API prakiraan cuaca BMKG</a> untuk desa terdekat, memakai kode wilayah Kemendagri. Sumber: BMKG (Badan Meteorologi, Klimatologi, dan Geofisika).</p></div>
             <div><h3>Asap &amp; ISPU</h3><p>Titik dikelompokkan per ±20 km. Untuk 30 kluster teratas, angin dan PM2.5 diambil dari <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (model CAMS). Kategori mengikuti ISPU PM2.5 rata-rata 24 jam (PermenLHK P.14/2020). Jalur asap adalah kerucut 6 jam searah angin.</p></div>
             <div><h3>Sumber panas tetap</h3><p>Titik yang terdeteksi pada ≥3 hari berbeda dalam 5 hari terakhir di tempat yang sama (±440 m) dan dekat permukiman ditandai abu-abu sebagai kemungkinan pabrik, pembangkit, atau pembakaran berulang, lalu tidak dihitung dalam analisis risiko. Titik tetap tampil di peta dan CSV. Titik di lahan gambut atau kawasan hutan tidak pernah ditandai.</p></div>
             <div><h3>Istilah</h3><p><b>Titik panas</b>: lokasi yang jauh lebih panas dari sekitarnya menurut satelit, umumnya api. <b>FRP</b>: kekuatan api dalam megawatt. <b>PM2.5</b>: partikel asap halus yang masuk ke paru-paru. <b>ISPU</b>: Indeks Standar Pencemar Udara. <b>KHG</b>: Kesatuan Hidrologis Gambut.</p></div>
@@ -331,10 +346,50 @@ function renderStatus(data: Report) {
   if (worst) byId('status-advice-text').textContent = `Bila Anda berada di daerah berstatus ${worst.label.toLowerCase()}: ${ISPU_ADVICE[worst.key].action}`
 }
 
+// ---------- Prakiraan BMKG ----------
+
+const isHazeText = (text: string) => /asap|kabur|haze|smoke/i.test(text)
+const clock = (localDatetime: string) => localDatetime.slice(11, 16).replace(':', '.')
+
+function bmkgBlock(forecast: BmkgForecast) {
+  const now = forecast.now
+  const place = [forecast.village && `Desa ${forecast.village}`, forecast.district && `Kec. ${forecast.district}`].filter(Boolean).join(', ')
+  const haze = forecast.hazeNext24.length
+    ? `<b>Kabut/asap atau udara kabur diprakirakan</b> pukul ${forecast.hazeNext24.slice(0, 6).map((step) => clock(step.time)).join(', ')} (24 jam ke depan).`
+    : 'Tidak ada prakiraan kabut/asap dalam 24 jam ke depan.'
+  return `<div class="check-bmkg${isHazeText(now.description) || forecast.hazeNext24.length ? ' haze' : ''}">
+    <strong>Prakiraan BMKG · ${escapeHtml(place)}</strong>
+    <p>Pukul ${escapeHtml(clock(now.time))}: <b>${escapeHtml(now.description)}</b>, ${now.temperature}°C, kelembapan ${now.humidity}%, angin ${now.windKmh} km/jam dari ${compassName(now.windFrom)}${now.visibility ? `, jarak pandang ${escapeHtml(now.visibility)} km` : ''}.</p>
+    <p>${haze}</p>
+    <small>Sumber: BMKG (Badan Meteorologi, Klimatologi, dan Geofisika)</small>
+  </div>`
+}
+
+// Penanda BMKG untuk kota di jalur asap; dimuat setelah daftar tampil, diantrekan di server.
+let townBmkgRun = 0
+async function loadTownBmkg(data: Report) {
+  const run = ++townBmkgRun
+  const towns = data.exposedTowns.slice(0, 12)
+  await Promise.all(towns.map(async (town, index) => {
+    try {
+      const response = await fetch(`/api/bmkg?lat=${town.lat.toFixed(4)}&lon=${town.lon.toFixed(4)}`)
+      if (!response.ok || run !== townBmkgRun) return
+      const forecast = await response.json() as BmkgForecast
+      const slot = document.querySelector<HTMLElement>(`[data-town-bmkg="${index}"]`)
+      if (!slot) return
+      const haze = isHazeText(forecast.now.description) || forecast.hazeNext24.length > 0
+      slot.className = `town-bmkg${haze ? ' haze' : ''}`
+      slot.textContent = `BMKG: ${forecast.now.description}${haze && !isHazeText(forecast.now.description) ? ' · asap diprakirakan' : ''}`
+    } catch {
+      // Penanda BMKG bersifat tambahan; daftar tetap tampil tanpa itu.
+    }
+  }))
+}
+
 function renderTowns(data: Report) {
   byId('towns-count').textContent = `${data.exposedTowns.length} DAERAH`
   byId('town-list').innerHTML = data.exposedTowns.length ? data.exposedTowns.slice(0, 24).map((town, index) => `
-    <li><button type="button" data-town="${index}">${levelPill(town.level)}<span class="town-name"><strong>${escapeHtml(town.name)}</strong><small>${escapeHtml(town.province)}${town.pm25 !== null ? ` · PM2.5 ±${Math.round(town.pm25)} µg/m³` : ''}</small></span><small class="town-fire">Api ${formatKm(town.fireKm)} di ${town.fireDirection}</small></button></li>`).join('')
+    <li><button type="button" data-town="${index}">${levelPill(town.level)}<span class="town-name"><strong>${escapeHtml(town.name)}</strong><small>${escapeHtml(town.province)}${town.pm25 !== null ? ` · PM2.5 ±${Math.round(town.pm25)} µg/m³` : ''}</small></span><small class="town-fire">Api ${formatKm(town.fireKm)} di ${town.fireDirection}</small>${index < 12 ? `<small class="town-bmkg" data-town-bmkg="${index}"></small>` : ''}</button></li>`).join('')
     : '<li class="area-empty">Tidak ada kota yang diperkirakan dilalui asap berkategori sedang atau lebih buruk.</li>'
 }
 
@@ -601,6 +656,7 @@ function render(data: Report) {
   renderRisk(data)
   renderStatus(data)
   renderTowns(data)
+  void loadTownBmkg(data)
   renderRegencies(data)
   void loadAreas()
 }
@@ -754,6 +810,7 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
     <div class="check-summary" style="--level:${result.level.color}">
       <div class="check-head">${levelPill(result.level)}<strong>${escapeHtml(place)}</strong></div>
       <ul>${lines.map((line) => `<li>${line}</li>`).join('')}</ul>
+      ${result.bmkg ? bmkgBlock(result.bmkg) : ''}
       <p class="check-advice"><b>${ISPU_ADVICE[result.level.key].meaning}</b> ${ISPU_ADVICE[result.level.key].action}</p>
       <button type="button" class="check-map" id="check-map">Lihat di peta ↗</button>
     </div>`

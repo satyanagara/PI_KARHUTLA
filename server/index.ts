@@ -9,6 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib'
 import { DAY_OPTIONS, DEFAULT_SOURCE, SOURCES, type Source } from '../src/report-types.ts'
+import { forecastNear, loadVillages } from './bmkg.ts'
 import { getBnpbReport } from './bnpb.ts'
 import { getCctv } from './cctv.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
@@ -214,6 +215,19 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/api/hotspots') return allowed(req, res) && (await handleHotspots(req, res, url))
     if (url.pathname === '/api/lokasi') return allowed(req, res) && (await handleLocation(req, res, url))
+    if (url.pathname === '/api/bmkg') {
+      if (!allowed(req, res)) return
+      const lat = Number(url.searchParams.get('lat'))
+      const lon = Number(url.searchParams.get('lon'))
+      if (!(lat >= -12 && lat <= 7 && lon >= 93 && lon <= 143)) return sendError(res, 400, 'Lokasi di luar wilayah Indonesia.')
+      try {
+        const forecast = await forecastNear(lat, lon)
+        return forecast ? sendJson(req, res, forecast, 'public, max-age=1800') : sendError(res, 404, 'Tidak ada desa dalam 15 km.')
+      } catch (error) {
+        console.error('[bmkg]', error)
+        return sendError(res, 502, 'Prakiraan BMKG sedang tidak tersedia.')
+      }
+    }
     if (url.pathname === '/api/cctv') {
       if (!allowed(req, res)) return
       try {
@@ -248,6 +262,8 @@ const server = createServer(async (req, res) => {
 })
 
 const counts = await loadReference(DATA)
+const villageCount = await loadVillages(DATA)
+console.log(`[server] kode desa BMKG: ${villageCount}`)
 console.log(`[server] data rujukan: ${counts.settlements} permukiman, ${counts.areas} poligon kawasan hutan, ${counts.peat} KHG, ${counts.regencies} kabupaten/kota`)
 if (!process.env.FIRMS_MAP_KEY) console.warn('[server] PERINGATAN: FIRMS_MAP_KEY belum diatur, /api/hotspots akan gagal.')
 server.listen(PORT, HOST, () => console.log(`[server] berjalan di http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))
