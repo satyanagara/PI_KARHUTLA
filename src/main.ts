@@ -2,7 +2,7 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, ispuLevel, levelRank, type Cluster, type IspuLevel } from './risk.ts'
-import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, vulnerableBlock, type ShareCard } from './impact.ts'
+import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, trashEquivalent, vulnerableBlock, type ShareCard } from './impact.ts'
 import { levelIcon, levelMeter } from './icons.ts'
 import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
@@ -233,6 +233,7 @@ app.innerHTML = `
             <div><h3>Prakiraan BMKG</h3><p>Prakiraan cuaca per desa (kondisi, angin, suhu, kelembapan, jarak pandang, termasuk prakiraan "Kabut/Asap" dan "Udara Kabur") diambil dari <a href="https://data.bmkg.go.id/prakiraan-cuaca/" target="_blank" rel="noreferrer">API prakiraan cuaca BMKG</a> untuk desa terdekat, memakai kode wilayah Kemendagri. Sumber: BMKG (Badan Meteorologi, Klimatologi, dan Geofisika).</p></div>
             <div><h3>Asap &amp; ISPU</h3><p>Titik dikelompokkan per ±20 km. Untuk 30 kluster teratas, angin dan PM2.5 diambil dari <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (model CAMS). Kategori mengikuti ISPU PM2.5 rata-rata 24 jam (PermenLHK P.14/2020). Jalur asap adalah kerucut 6 jam searah angin.</p></div>
             <div><h3>Sumber panas tetap</h3><p>Titik yang terdeteksi pada ≥3 hari berbeda dalam 5 hari terakhir di tempat yang sama (±440 m) dan dekat permukiman ditandai abu-abu sebagai kemungkinan pabrik, pembangkit, atau pembakaran berulang, lalu tidak dihitung dalam analisis risiko. Titik tetap tampil di peta dan CSV. Titik di lahan gambut atau kawasan hutan tidak pernah ditandai.</p></div>
+            <div><h3>Setara sampah dibakar</h3><p>Skala asap sebuah wilayah api dibandingkan dengan pembakaran sampah rumah tangga: dari kekuatan api satelit (FRP) diperkirakan biomassa yang terbakar (0,368 kg per MJ, Wooster dkk. 2005) dan PM2.5 yang dilepaskan (±9 g/kg vegetasi, Akagi dkk. 2011; ±17 g/kg gambut, Stockwell dkk. 2016), lalu dibagi emisi pembakaran sampah terbuka (±9,8 g/kg, Wiedinmyer dkk. 2014) dan sampah rumah tangga Indonesia (±2,7 kg/hari, SIPSN KLHK). Tiap deteksi dianggap mewakili ±12 jam. Ini gambaran skala dengan ketelitian 2–3 kali lipat, bukan pengukuran, dan tidak tersedia untuk data BRIN/LAPAN yang tanpa FRP.</p></div>
             <div><h3>Kesehatan & setara rokok</h3><p>Ancaman bagi anak-anak, lansia, dan ibu hamil disarikan dari panduan WHO dan Kementerian Kesehatan tentang asap kebakaran dan PM2.5. Setara rokok memakai perkiraan Berkeley Earth: PM2.5 22 µg/m³ selama sehari ≈ 1 batang rokok. Keduanya untuk memberi gambaran, bukan diagnosis; ikuti arahan tenaga kesehatan setempat.</p></div>
             <div><h3>Istilah</h3><p><b>Titik panas</b>: lokasi yang jauh lebih panas dari sekitarnya menurut satelit, umumnya api. <b>FRP</b>: kekuatan api dalam megawatt. <b>PM2.5</b>: partikel asap halus yang masuk ke paru-paru. <b>ISPU</b>: Indeks Standar Pencemar Udara. <b>KHG</b>: Kesatuan Hidrologis Gambut.</p></div>
             <div><h3>Batasan</h3><p>Hotspot bukan konfirmasi kebakaran, kualitas udara berasal dari model, dan batas kawasan dapat berbeda dari kondisi lapangan. Gunakan sebagai peringatan dini, bukan pengganti verifikasi lapangan.</p></div>
@@ -334,6 +335,8 @@ function clusterSentence(cluster: Cluster) {
   if (smoke && levelRank(smoke.level.key) >= levelRank('sedang')) {
     sentence += ` Asap ${smoke.level.label.toLowerCase()} bergerak ke ${compassName(smoke.heading)} ±${Math.round(smoke.reachKm)} km${smoke.towns.length ? `, melewati ${smoke.towns.slice(0, 2).map((town) => escapeHtml(town.name)).join(' dan ')}` : ''}.`
   }
+  const trash = report?.frpAvailable ? trashEquivalent(cluster.frp, cluster.peatFires / cluster.count, report.days) : null
+  if (trash && trash.households >= 1000) sentence += ` Asapnya setara membakar sampah harian <b>${trash.text}</b> selama ${report!.days === 1 ? 'sehari' : `${report!.days} hari`}.`
   return sentence
 }
 
@@ -375,6 +378,8 @@ function renderStatus(data: Report) {
     const unhealthy = data.exposedTowns.filter((town) => UNHEALTHY_LEVELS.includes(town.level.key))
     if (unhealthy.length) points.push(`<b>${unhealthy.length}</b> kota/kecamatan diperkirakan dilalui asap tidak sehat, antara lain ${unhealthy.slice(0, 4).map((town) => `<b>${escapeHtml(town.name)}</b>`).join(', ')}.`)
     if (summary.stationary) points.push(`<b>${numberFormat.format(summary.stationary)}</b> titik lain tidak dihitung karena terdeteksi berulang di tempat yang sama, kemungkinan pabrik, pembangkit, atau pembakaran berulang.`)
+    const trash = data.frpAvailable && summary.total ? trashEquivalent(summary.frp, summary.peat.inside / summary.total, data.days) : null
+    if (trash) points.push(`Semua api itu melepaskan <b>±${numberFormat.format(Math.round(trash.pm25Tonnes))} ton</b> asap halus (PM2.5), setara membakar sampah harian <b>${trash.text}</b> setiap hari selama ${period} <small>(perkiraan kasar dari kekuatan api satelit)</small>.`)
     const forest = summary.konservasi.inside + summary.lindung.inside
     if (forest || summary.peat.inside) points.push(`<b>${numberFormat.format(forest)}</b> titik berada di kawasan konservasi atau hutan lindung, dan <b>${numberFormat.format(summary.peat.inside)}</b> di lahan gambut yang menghasilkan asap pekat.`)
   }
@@ -894,7 +899,7 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
     <div class="check-summary" style="--level:${result.level.color}">
       <div class="check-head">${levelIcon(result.level.key, 52)}<div><small>Udara yang Anda hirup hari ini di</small><strong>${escapeHtml(place)}</strong><span class="ispu-badge ${result.level.key}" style="--level:${result.level.color}">${result.level.label}</span></div></div>
       ${levelMeter(result.level.key)}
-      ${cigarettes ? `<p class="impact-line">Menghirup udara ini seharian setara mengisap <b class="impact-number">${cigarettes}</b>, termasuk bagi bayi dan anak-anak${streak && UNHEALTHY_LEVELS.includes(result.level.key) ? `. Udara tidak sehat <b>${streak}</b>` : ''}.<small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small></p>` : ''}
+      ${cigarettes ? `<p class="impact-line">Menghirup udara ini seharian setara mengisap <b class="impact-number">${cigarettes}</b>, termasuk bagi bayi dan anak-anak${streak && UNHEALTHY_LEVELS.includes(result.level.key) ? `. Udara tidak sehat <b>${streak}</b>` : ''}.${levelRank(result.level.key) >= levelRank('sangat-tidak-sehat') ? ' Rasanya seperti berdiri seharian di dalam asap pembakaran sampah.' : ''}<small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small></p>` : ''}
       ${vulnerableBlock(result.level)}
       ${checklist(result.level, 'langkah-cek')}
       <ul>${lines.map((line) => `<li>${line}</li>`).join('')}</ul>

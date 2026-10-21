@@ -5,6 +5,9 @@ import { levelIcon } from './icons.ts'
 
 const SITE = 'amukapi.santaralabs.ai'
 
+// Ajakan perilaku: pembakaran sampah di permukiman menambah asap tepat di tempat orang bernapas.
+const NO_BURNING = 'Jangan menambah asap: tunda membakar sampah selama kabut asap (membakar sampah terbuka juga dilarang UU 18/2008).'
+
 export const SAFETY_STEPS: Record<string, string[]> = {
   baik: [
     'Udara bersih, aman beraktivitas di luar.',
@@ -15,21 +18,25 @@ export const SAFETY_STEPS: Record<string, string[]> = {
     'Kelompok sensitif (anak, lansia, penderita asma) kurangi aktivitas berat di luar.',
     'Siapkan masker N95/KN95 di rumah.',
     'Pantau perkembangan asap beberapa jam ke depan.',
+    NO_BURNING,
   ],
   'tidak-sehat': [
     'Tutup jendela dan pintu.',
     'Pakai masker N95/KN95 saat keluar; masker kain tidak menyaring asap.',
     'Anak, lansia, ibu hamil, dan penderita asma tetap di dalam ruangan.',
+    NO_BURNING,
   ],
   'sangat-tidak-sehat': [
     'Tutup jendela, pintu, dan celah-celahnya dengan kain basah.',
     'Hindari keluar rumah; bila terpaksa, pakai N95/KN95.',
     'Siapkan satu ruangan paling tertutup sebagai ruang bersih untuk kelompok rentan.',
+    NO_BURNING,
   ],
   berbahaya: [
     'Tetap di dalam ruangan tertutup; tutup celah dengan kain basah.',
     'Kelompok rentan sebaiknya pindah sementara ke tempat berudara bersih.',
     'Sesak napas, nyeri dada, atau batuk berat? Segera ke fasilitas kesehatan atau hubungi 112.',
+    NO_BURNING,
   ],
   na: [
     'Pantau informasi resmi pemerintah daerah.',
@@ -68,6 +75,43 @@ export function vulnerableBlock(level: IspuLevel) {
 }
 
 export const VULNERABLE_SHORT = 'Anak-anak paling terancam ISPA dan serangan asma; lansia terancam serangan jantung dan stroke.'
+
+// ---------- Skala emisi: setara sampah rumah tangga yang dibakar ----------
+// Dari kekuatan api (FRP, MW) diperkirakan biomassa terbakar (0,368 kg/MJ; Wooster dkk. 2005), lalu PM2.5 yang
+// dilepaskan: ±9 g/kg untuk vegetasi (Akagi dkk. 2011) hingga ±17 g/kg untuk gambut (Stockwell dkk. 2016).
+// Tiap deteksi dianggap mewakili ±12 jam (dua lintasan satelit per hari). Pembanding: pembakaran sampah terbuka
+// ±9,8 g PM2.5/kg (Wiedinmyer dkk. 2014) dan sampah rumah tangga Indonesia ±2,7 kg/hari (SIPSN KLHK).
+// Ini gambaran skala (ketelitian ±2–3 kali lipat), bukan pengukuran.
+const SECONDS_PER_DETECTION = 12 * 3600
+const BIOMASS_PER_MJ = 0.368
+const EF_VEGETATION = 0.009
+const EF_PEAT = 0.017
+const EF_TRASH = 0.0098
+const TRASH_PER_HOUSEHOLD_DAY = 2.7
+const HOUSEHOLDS_INDONESIA = 70_000_000
+
+export function smokeEmissionKg(frpMw: number, peatFraction: number) {
+  const biomassKg = BIOMASS_PER_MJ * frpMw * SECONDS_PER_DETECTION
+  return biomassKg * (EF_VEGETATION + (EF_PEAT - EF_VEGETATION) * Math.min(1, Math.max(0, peatFraction)))
+}
+
+// Jumlah rumah tangga yang sampah hariannya harus dibakar setiap hari selama `days` untuk menghasilkan PM2.5 sebanyak itu.
+export function trashHouseholds(pm25Kg: number, days: number) {
+  return pm25Kg / (EF_TRASH * TRASH_PER_HOUSEHOLD_DAY * Math.max(1, days))
+}
+
+export function formatHouseholds(households: number) {
+  if (households >= HOUSEHOLDS_INDONESIA) return `${(households / HOUSEHOLDS_INDONESIA).toFixed(1).replace('.', ',')} kali seluruh rumah tangga Indonesia`
+  if (households >= 1e6) return `±${(households / 1e6).toFixed(1).replace('.', ',')} juta rumah tangga`
+  if (households >= 1e3) return `±${Math.round(households / 1e3)} ribu rumah tangga`
+  return `±${Math.round(households)} rumah tangga`
+}
+
+export function trashEquivalent(frpMw: number, peatFraction: number, days: number) {
+  if (!frpMw) return null
+  const pm25Kg = smokeEmissionKg(frpMw, peatFraction)
+  return { pm25Tonnes: pm25Kg / 1000, households: trashHouseholds(pm25Kg, days), text: formatHouseholds(trashHouseholds(pm25Kg, days)) }
+}
 
 export function cigaretteText(pm25: number | null) {
   const count = cigarettesPerDay(pm25)
