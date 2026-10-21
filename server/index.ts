@@ -27,6 +27,9 @@ const DATA = path.join(ROOT, 'data')
 const PORT = Number(process.env.PORT ?? 8787)
 const HOST = process.env.HOST ?? '0.0.0.0'
 const TRUST_PROXY = process.env.TRUST_PROXY === '1'
+// Google Analytics 4 aktif hanya bila GA_MEASUREMENT_ID (G-XXXXXXXX) disetel; tanpa Google Signals dan tanpa
+// personalisasi iklan, dan tidak dimuat bila pengunjung menyalakan Do Not Track / Global Privacy Control.
+const GA_ID = /^G-[A-Z0-9]{4,16}$/.test(process.env.GA_MEASUREMENT_ID ?? '') ? process.env.GA_MEASUREMENT_ID! : ''
 const RATE_LIMIT_PER_MINUTE = Number(process.env.RATE_LIMIT_PER_MINUTE ?? 60)
 
 const MIME: Record<string, string> = {
@@ -44,11 +47,11 @@ const MIME: Record<string, string> = {
 const SECURITY_HEADERS = {
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self'",
+    `script-src 'self'${GA_ID ? ' https://www.googletagmanager.com' : ''}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://server.arcgisonline.com https://tile.openstreetmap.org https://i.ytimg.com",
+    `img-src 'self' data: https://server.arcgisonline.com https://tile.openstreetmap.org https://i.ytimg.com${GA_ID ? ' https://*.google-analytics.com https://*.googletagmanager.com' : ''}`,
     "frame-src https://www.youtube-nocookie.com",
-    "connect-src 'self'",
+    `connect-src 'self'${GA_ID ? ' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com' : ''}`,
     "font-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
@@ -213,10 +216,30 @@ async function handleOgImage(req: IncomingMessage, res: ServerResponse, url: URL
 
 let indexHtml: string | null = null
 
+// Skrip pemuat Analytics disajikan dari domain sendiri agar CSP tetap tanpa inline script.
+const GA_TAGS = GA_ID
+  ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${GA_ID}"></script><script defer src="/ga.js"></script>`
+  : ''
+const GA_SCRIPT = GA_ID
+  ? `if (navigator.doNotTrack !== '1' && !navigator.globalPrivacyControl) {
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', '${GA_ID}', { allow_google_signals: false, allow_ad_personalization_signals: false, anonymize_ip: true });
+}
+`
+  : ''
+
+async function readIndexHtml() {
+  indexHtml ??= (await readFile(path.join(DIST, 'index.html'), 'utf8')).replace('</head>', `${GA_TAGS}</head>`)
+  return indexHtml
+}
+let indexPayload: Payload | null = null
+
 // index.html untuk tautan ?cek=lat,lon: meta Open Graph diganti agar pratinjau di media sosial memuat
 // status lokasi itu. Judul dihitung paling lama 2,5 detik supaya perayap tidak menunggu terlalu lama.
 async function serveIndexWithOg(req: IncomingMessage, res: ServerResponse, url: URL, point: { lat: number; lon: number }) {
-  indexHtml ??= await readFile(path.join(DIST, 'index.html'), 'utf8')
+  const indexHtml = await readIndexHtml()
   const filters = readFilters(url) ?? { source: DEFAULT_SOURCE as Source, days: 3 }
   const cek = `${point.lat.toFixed(4)},${point.lon.toFixed(4)}`
   const pageUrl = `${SITE_URL}/?cek=${cek}`
@@ -276,7 +299,8 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) 
   if (!(await stat(index).then(() => true, () => false))) return sendError(res, 503, 'Halaman belum dibangun. Jalankan npm run build.')
   const point = parseCek(url)
   if (point) return serveIndexWithOg(req, res, url, point)
-  return serveFile(req, res, index, 'no-cache')
+  indexPayload ??= compress(Buffer.from(await readIndexHtml()), MIME['.html'])
+  return send(req, res, indexPayload, 'no-cache')
 }
 
 const server = createServer(async (req, res) => {
@@ -290,6 +314,10 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/hotspots') return allowed(req, res) && (await handleHotspots(req, res, url))
     if (url.pathname === '/api/lokasi') return allowed(req, res) && (await handleLocation(req, res, url))
     if (url.pathname === '/og/cek.png') return allowed(req, res) && (await handleOgImage(req, res, url))
+    if (url.pathname === '/ga.js') {
+      if (!GA_ID) return sendError(res, 404, 'Analytics tidak diaktifkan.')
+      return send(req, res, compress(Buffer.from(GA_SCRIPT), MIME['.js']), 'public, max-age=3600')
+    }
     if (url.pathname === '/api/bmkg') {
       if (!allowed(req, res)) return
       const lat = Number(url.searchParams.get('lat'))
@@ -342,6 +370,7 @@ const wilayah = await loadWilayah(DATA)
 console.log(`[server] wilayah Kemendagri: ${wilayah.villages} desa/kelurahan, ${wilayah.areas} kecamatan & kabupaten/kota`)
 console.log(`[server] data rujukan: ${counts.settlements} permukiman, ${counts.areas} poligon kawasan hutan, ${counts.peat} KHG, ${counts.regencies} kabupaten/kota`)
 if (!process.env.FIRMS_MAP_KEY) console.warn('[server] PERINGATAN: FIRMS_MAP_KEY belum diatur, /api/hotspots akan gagal.')
+console.log(GA_ID ? `[server] Google Analytics aktif (${GA_ID})` : '[server] Google Analytics tidak aktif (GA_MEASUREMENT_ID kosong)')
 server.listen(PORT, HOST, () => console.log(`[server] berjalan di http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))
 // Hangatkan laporan bawaan saat start agar permintaan pertama (termasuk perayap pratinjau media sosial) tidak menunggu lama.
 getReport(DEFAULT_SOURCE as Source, 3)

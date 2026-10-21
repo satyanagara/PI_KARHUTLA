@@ -101,6 +101,7 @@ Deploy selalu lewat git: perubahan harus sudah di-commit dan di-push, server men
 | `TRUST_PROXY` | tidak | Isi `1` bila di belakang reverse proxy agar pembatas laju memakai IP asli dari `X-Real-IP`. |
 | `RATE_LIMIT_PER_MINUTE` | tidak | Batas permintaan API per IP per menit, bawaan `60`. |
 | `CACHE_DIR` | tidak | Folder salinan laporan BNPB terakhir, bawaan direktori sementara sistem. |
+| `GA_MEASUREMENT_ID` | tidak | Measurement ID Google Analytics 4 (`G-XXXXXXXX`). Bila diisi, kunjungan dihitung tanpa Google Signals/personalisasi iklan dan tidak dimuat bagi pengunjung yang menyalakan Do Not Track. Kosongkan untuk mematikan. `npm run deploy` mengambil nilainya dari `.env.local`. |
 
 ## Data rujukan
 

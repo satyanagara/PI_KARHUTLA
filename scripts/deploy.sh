@@ -2,7 +2,7 @@
 # Deploy ke server aplikasi lewat git:
 #   1. lokal : semua perubahan harus sudah di-commit (atau beri PESAN="..." untuk add + commit otomatis), lalu push
 #   2. server: git pull --ff-only di ~/pemantau-karhutla (di-clone sekali bila belum), cek commit sama dengan lokal
-#   3. server: tulis .env (hanya FIRMS_MAP_KEY), build image, ganti container
+#   3. server: tulis .env (FIRMS_MAP_KEY, TRUST_PROXY, GA_MEASUREMENT_ID bila ada), build image, ganti container
 # Kredensial SSH dibaca dari secrets/server.txt bagian [target]; kata sandi tidak pernah ditampilkan.
 #
 #   npm run deploy                         # bila semua sudah di-commit
@@ -66,7 +66,8 @@ git pull -q --ff-only origin $BRANCH
 echo \"    server di \$(git log -1 --format='%h %s')\""
 
 echo "==> Menulis .env server (hanya FIRMS_MAP_KEY)"
-printf 'FIRMS_MAP_KEY=%s\nTRUST_PROXY=1\n' "$KEY" | remote "umask 077 && cat > $REMOTE_DIR/.env"
+GA_ID=$(sed -n 's/^GA_MEASUREMENT_ID=//p' "$ROOT/.env.local")
+printf 'FIRMS_MAP_KEY=%s\nTRUST_PROXY=1\nGA_MEASUREMENT_ID=%s\n' "$KEY" "$GA_ID" | remote "umask 077 && cat > $REMOTE_DIR/.env"
 
 echo "==> Build image dan jalankan container"
 # Build diulang hingga 3 kali: koneksi server ke Docker Hub kadang gagal sesaat (rute IPv6).
