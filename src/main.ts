@@ -860,7 +860,7 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
   checkCard = { level: result.level, place, pm25, streakDays: result.air?.unhealthyDays ?? 0, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · prakiraan BMKG' }
   checkResult.innerHTML = `
     <div class="check-summary" style="--level:${result.level.color}">
-      <div class="check-head">${levelIcon(result.level.key, 52)}<div><small>Udara yang Anda hirup hari ini di</small><strong>${escapeHtml(place)}</strong>${levelPill(result.level)}</div></div>
+      <div class="check-head">${levelIcon(result.level.key, 52)}<div><small>Udara yang Anda hirup hari ini di</small><strong>${escapeHtml(place)}</strong><span class="ispu-badge ${result.level.key}" style="--level:${result.level.color}">${result.level.label}</span></div></div>
       ${levelMeter(result.level.key)}
       ${cigarettes ? `<p class="impact-line">Menghirup udara ini seharian setara mengisap <b class="impact-number">${cigarettes}</b>, termasuk bagi bayi dan anak-anak${streak && UNHEALTHY_LEVELS.includes(result.level.key) ? `. Udara tidak sehat <b>${streak}</b>` : ''}.<small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small></p>` : ''}
       ${vulnerableBlock(result.level)}
