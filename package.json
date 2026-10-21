@@ -20,6 +20,7 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
     "leaflet": "^1.9.4"
   },
   "engines": {

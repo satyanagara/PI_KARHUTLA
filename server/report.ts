@@ -529,7 +529,7 @@ export function searchPlaces(query: string) {
   return [...areas, ...towns, ...villagesFound, ...hamlets].slice(0, 8)
 }
 
-export async function checkLocation(lat: number, lon: number, source: Source, days: number): Promise<LocationCheck> {
+export async function checkLocation(lat: number, lon: number, source: Source, days: number, options: { skipBmkg?: boolean } = {}): Promise<LocationCheck> {
   if (!reference) throw new Error('Data rujukan belum dimuat.')
   const { report } = await getReport(source, days)
   const place = reference.settlements.nearest(lat, lon, 15)
@@ -572,7 +572,7 @@ export async function checkLocation(lat: number, lon: number, source: Source, da
 
   // Prakiraan BMKG ditunggu paling lama 8 detik; bila antrean penuh, hasil tetap dikirim tanpa BMKG.
   const bmkgPromise = Promise.race([
-    forecastNear(lat, lon),
+    options.skipBmkg ? Promise.resolve(null) : forecastNear(lat, lon),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
   ]).catch((error) => {
     console.error('[lokasi] prakiraan BMKG gagal:', error instanceof Error ? error.message : error)

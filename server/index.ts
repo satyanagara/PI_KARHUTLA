@@ -13,6 +13,7 @@ import { forecastNear } from './bmkg.ts'
 import { loadWilayah } from './wilayah.ts'
 import { getBnpbReport } from './bnpb.ts'
 import { getCctv } from './cctv.ts'
+import { prepareOg, renderOgPng } from './og.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
 
 // Server tanpa IPv6: dahulukan IPv4 dan beri waktu cukup per percobaan koneksi. Batas bawaan Node (250 ms)
@@ -179,6 +180,75 @@ async function handleLocation(req: IncomingMessage, res: ServerResponse, url: UR
   }
 }
 
+// ---------- Pratinjau tautan per lokasi (Open Graph) ----------
+
+const SITE_URL = process.env.SITE_URL ?? 'https://amukapi.santaralabs.ai'
+
+function parseCek(url: URL) {
+  const parts = (url.searchParams.get('cek') ?? '').split(',').map(Number)
+  if (parts.length !== 2 || !parts.every(Number.isFinite)) return null
+  const [lat, lon] = parts
+  return lat >= -12 && lat <= 7 && lon >= 93 && lon <= 143 ? { lat, lon } : null
+}
+
+function placeLabel(result: Awaited<ReturnType<typeof checkLocation>>, lat: number, lon: number) {
+  return result.place ? `${result.place.name}${result.place.province ? `, ${result.place.province}` : ''}` : `${lat.toFixed(3)}, ${lon.toFixed(3)}`
+}
+
+async function handleOgImage(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const point = parseCek(url)
+  const filters = readFilters(url)
+  if (!point || !filters) return sendError(res, 400, 'Parameter tidak valid.')
+  try {
+    const key = `${point.lat.toFixed(4)},${point.lon.toFixed(4)}:${filters.source}:${filters.days}`
+    const result = await checkLocation(point.lat, point.lon, filters.source, filters.days, { skipBmkg: true })
+    const png = await renderOgPng(key, result, placeLabel(result, point.lat, point.lon), filters.source)
+    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'image/png', 'Content-Length': String(png.length), 'Cache-Control': 'public, max-age=900' })
+    res.end(req.method === 'HEAD' ? undefined : Buffer.from(png))
+  } catch (error) {
+    console.error('[og]', error)
+    sendError(res, 502, 'Gambar pratinjau tidak dapat dibuat.')
+  }
+}
+
+let indexHtml: string | null = null
+
+// index.html untuk tautan ?cek=lat,lon: meta Open Graph diganti agar pratinjau di media sosial memuat
+// status lokasi itu. Judul dihitung paling lama 2,5 detik supaya perayap tidak menunggu terlalu lama.
+async function serveIndexWithOg(req: IncomingMessage, res: ServerResponse, url: URL, point: { lat: number; lon: number }) {
+  indexHtml ??= await readFile(path.join(DIST, 'index.html'), 'utf8')
+  const filters = readFilters(url) ?? { source: DEFAULT_SOURCE as Source, days: 3 }
+  const cek = `${point.lat.toFixed(4)},${point.lon.toFixed(4)}`
+  const pageUrl = `${SITE_URL}/?cek=${cek}`
+  const image = `${SITE_URL}/og/cek.png?cek=${cek}&source=${filters.source}&days=${filters.days}`
+  let title = 'Kualitas udara dan risiko api di lokasi ini — AMUK API'
+  let description = 'Cek status asap, titik api terdekat, dan langkah aman untuk lokasi ini.'
+  try {
+    const result = await Promise.race([
+      checkLocation(point.lat, point.lon, filters.source, filters.days, { skipBmkg: true }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+    ])
+    if (result) {
+      title = `${placeLabel(result, point.lat, point.lon)}: udara ${result.level.label.toUpperCase()} — AMUK API`
+      const fire = result.nearestFire
+      description = `Status kualitas udara ${result.level.label.toLowerCase()}${fire && fire.km <= 25 ? `, titik api terdekat ${fire.km.toFixed(1).replace('.', ',')} km` : ''}. Cek lokasi Anda dan langkah aman di AMUK API.`
+    }
+  } catch {
+    // Judul generik sudah cukup bila perhitungan gagal.
+  }
+  const esc = (text: string) => text.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`)
+  const html = indexHtml
+    .replace(/<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${esc(title)}" />`)
+    .replace(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(description)}" />`)
+    .replace(/<meta property="og:url" content="[^"]*" \/>/, `<meta property="og:url" content="${esc(pageUrl)}" />`)
+    .replace(/<meta property="og:image" content="[^"]*" \/>/, `<meta property="og:image" content="${esc(image)}" /><meta property="og:image:alt" content="${esc(title)}" />`)
+    .replace(/<meta property="og:image:width" content="[^"]*" \/>/, '<meta property="og:image:width" content="1200" />')
+    .replace(/<meta name="twitter:title" content="[^"]*" \/>/, `<meta name="twitter:title" content="${esc(title)}" />`)
+    .replace(/<meta name="twitter:description" content="[^"]*" \/>/, `<meta name="twitter:description" content="${esc(description)}" />`)
+    .replace(/<meta name="twitter:image" content="[^"]*" \/>/, `<meta name="twitter:image" content="${esc(image)}" />`)
+  send(req, res, compress(Buffer.from(html), MIME['.html']), 'no-cache')
+}
+
 const fileCache = new Map<string, Payload>()
 
 async function serveFile(req: IncomingMessage, res: ServerResponse, filePath: string, cacheControl: string) {
@@ -191,7 +261,8 @@ async function serveFile(req: IncomingMessage, res: ServerResponse, filePath: st
   send(req, res, payload, cacheControl)
 }
 
-async function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: string) {
+async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const pathname = url.pathname
   const relative = path.normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '')
   const target = path.join(DIST, relative)
   if (target !== DIST && !target.startsWith(DIST + path.sep)) return sendError(res, 400, 'Path tidak valid.')
@@ -203,6 +274,8 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: 
   if (path.extname(relative)) return sendError(res, 404, 'Berkas tidak ditemukan.')
   const index = path.join(DIST, 'index.html')
   if (!(await stat(index).then(() => true, () => false))) return sendError(res, 503, 'Halaman belum dibangun. Jalankan npm run build.')
+  const point = parseCek(url)
+  if (point) return serveIndexWithOg(req, res, url, point)
   return serveFile(req, res, index, 'no-cache')
 }
 
@@ -216,6 +289,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/api/hotspots') return allowed(req, res) && (await handleHotspots(req, res, url))
     if (url.pathname === '/api/lokasi') return allowed(req, res) && (await handleLocation(req, res, url))
+    if (url.pathname === '/og/cek.png') return allowed(req, res) && (await handleOgImage(req, res, url))
     if (url.pathname === '/api/bmkg') {
       if (!allowed(req, res)) return
       const lat = Number(url.searchParams.get('lat'))
@@ -255,13 +329,14 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) return sendError(res, 404, 'Endpoint tidak ditemukan.')
     if (url.pathname === '/data/kawasan-hutan.json') return serveFile(req, res, path.join(DATA, 'kawasan-hutan-web.json'), 'public, max-age=86400')
     if (url.pathname === '/data/gambut.json') return serveFile(req, res, path.join(DATA, 'gambut-web.json'), 'public, max-age=86400')
-    return serveStatic(req, res, url.pathname)
+    return serveStatic(req, res, url)
   } catch (error) {
     console.error('[server]', error)
     if (!res.headersSent) sendError(res, 500, 'Kesalahan server.')
   }
 })
 
+prepareOg(ROOT).then(() => console.log('[server] perender gambar pratinjau siap')).catch((error) => console.error('[server] perender gambar pratinjau gagal:', error))
 const counts = await loadReference(DATA)
 const wilayah = await loadWilayah(DATA)
 console.log(`[server] wilayah Kemendagri: ${wilayah.villages} desa/kelurahan, ${wilayah.areas} kecamatan & kabupaten/kota`)
