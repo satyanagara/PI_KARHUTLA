@@ -343,3 +343,7 @@ console.log(`[server] wilayah Kemendagri: ${wilayah.villages} desa/kelurahan, ${
 console.log(`[server] data rujukan: ${counts.settlements} permukiman, ${counts.areas} poligon kawasan hutan, ${counts.peat} KHG, ${counts.regencies} kabupaten/kota`)
 if (!process.env.FIRMS_MAP_KEY) console.warn('[server] PERINGATAN: FIRMS_MAP_KEY belum diatur, /api/hotspots akan gagal.')
 server.listen(PORT, HOST, () => console.log(`[server] berjalan di http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))
+// Hangatkan laporan bawaan saat start agar permintaan pertama (termasuk perayap pratinjau media sosial) tidak menunggu lama.
+getReport(DEFAULT_SOURCE as Source, 3)
+  .then(() => console.log('[server] laporan bawaan siap'))
+  .catch((error) => console.error('[server] pemanasan laporan gagal:', error instanceof Error ? error.message : error))
