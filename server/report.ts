@@ -131,7 +131,7 @@ async function fetchSmoke(points: { lat: number; lon: number }[]) {
     const latitude = missing.map(({ lat }) => lat.toFixed(3)).join(',')
     const longitude = missing.map(({ lon }) => lon.toFixed(3)).join(',')
     const [air, wind] = await Promise.all([
-      getJson(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=pm2_5&hourly=pm2_5&past_days=7&forecast_days=2&timezone=GMT`),
+      getJson(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=pm2_5&hourly=pm2_5&past_days=7&forecast_days=5&timezone=GMT`),
       getJson(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=kmh&timezone=GMT`),
     ])
     missing.forEach(({ lat, lon }, index) => {
@@ -140,6 +140,7 @@ async function fetchSmoke(points: { lat: number; lon: number }[]) {
       const next: number[] = []
       // Tujuh periode 24 jam ke belakang dari sekarang, untuk menghitung hari berturut-turut udara tidak sehat.
       const windows: number[][] = Array.from({ length: 7 }, () => [])
+      const ahead: number[][] = Array.from({ length: 4 }, () => [])
       hourly.time.forEach((time: string, hour: number) => {
         const value = hourly.pm2_5[hour]
         if (typeof value !== 'number') return
@@ -148,6 +149,8 @@ async function fetchSmoke(points: { lat: number; lon: number }[]) {
         if (at > now && at <= now + 24 * 3600 * 1000) next.push(value)
         const window = Math.floor((now - at) / (24 * 3600 * 1000))
         if (at <= now && window < 7) windows[window].push(value)
+        const step = Math.floor((at - now) / (24 * 3600 * 1000))
+        if (at > now && step < 4) ahead[step].push(value)
       })
       let unhealthyDays = 0
       for (const values of windows) {
@@ -164,6 +167,7 @@ async function fetchSmoke(points: { lat: number; lon: number }[]) {
           windKmh: wind[index]?.current?.wind_speed_10m ?? 0,
           windFrom: wind[index]?.current?.wind_direction_10m ?? 0,
           unhealthyDays,
+          forecastMeans: ahead.map((values) => meanOf(values)),
         },
       })
     })

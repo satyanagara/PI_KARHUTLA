@@ -58,7 +58,7 @@ export type LocationCheck = {
   bmkg: BmkgForecast | null
   counts: { km5: number; km10: number; km25: number }
   smoke: { level: IspuLevel; fireKm: number; fireDirection: string; place: string | null }[]
-  air: { pm25Mean24: number | null; pm25Now: number | null; pm25Max24: number | null; windKmh: number; windFrom: number; unhealthyDays: number; level: IspuLevel } | null
+  air: { pm25Mean24: number | null; pm25Now: number | null; pm25Max24: number | null; windKmh: number; windFrom: number; unhealthyDays: number; forecastMeans: (number | null)[]; level: IspuLevel } | null
   level: IspuLevel
   source: Source
   days: number

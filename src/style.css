@@ -1251,6 +1251,76 @@ h1 span {
   color: var(--ink-faint);
 }
 
+.wildlife {
+  color: #2f6b49 !important;
+  font-weight: 600;
+}
+
+.compare {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--ink-faint);
+}
+
+.prognosis {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-strong);
+}
+
+.prognosis > strong {
+  font-size: 13px;
+}
+
+.prognosis p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.prognosis-chips {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.prognosis-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  text-align: center;
+}
+
+.prognosis-chip i {
+  display: block;
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--level);
+}
+
+.prognosis-chip b {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.prognosis-chip small {
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: var(--ink-faint);
+}
+
 .impact-vulnerable {
   display: block;
   margin-top: 6px;
