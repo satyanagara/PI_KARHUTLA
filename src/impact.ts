@@ -209,23 +209,74 @@ export async function renderShareCard(card: ShareCard): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Gagal membuat gambar.'))), 'image/png'))
 }
 
-// Bagikan lewat menu bagikan perangkat (bila didukung), atau unduh gambarnya.
-export async function shareCardImage(card: ShareCard, filename: string, text: string) {
+// Bagikan lewat menu bagikan perangkat (bila didukung; di ponsel pengguna bisa memilih Instagram, Facebook,
+// X, dll.), atau unduh gambarnya. Mengembalikan 'shared' atau 'downloaded'.
+export async function shareCardImage(card: ShareCard, filename: string, text: string): Promise<'shared' | 'downloaded'> {
   const blob = await renderShareCard(card)
   const file = new File([blob], filename, { type: 'image/png' })
   if (navigator.canShare?.({ files: [file] })) {
     await navigator.share({ files: [file], text }).catch(() => undefined)
-    return
+    return 'shared'
   }
   const link = document.createElement('a')
   link.href = URL.createObjectURL(blob)
   link.download = filename
   link.click()
   setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+  return 'downloaded'
 }
 
 export function whatsappLink(text: string) {
   return `https://wa.me/?text=${encodeURIComponent(text)}`
+}
+
+// Teks pendek untuk X (batas 280 karakter termasuk tautan).
+export function shortShareText(card: ShareCard) {
+  const cigarettes = cigaretteText(card.pm25)
+  const parts = [
+    `Kualitas udara di ${card.place} hari ini: ${card.level.label.toUpperCase()}.`,
+    cigarettes ? `Setara mengisap ${cigarettes} sehari, termasuk bagi anak-anak.` : '',
+    UNHEALTHY.includes(card.level.key) ? VULNERABLE_SHORT : '',
+  ].filter(Boolean)
+  let text = parts.join(' ')
+  while (text.length > 230 && parts.length > 1) {
+    parts.pop()
+    text = parts.join(' ')
+  }
+  return text.length > 230 ? `${text.slice(0, 227)}…` : text
+}
+
+// Tautan bagikan per platform. Instagram tidak punya tautan bagikan web; dipakai gambar lewat menu bagikan perangkat.
+export function shareLinks(card: ShareCard, url: string) {
+  const long = shareText(card)
+  const short = shortShareText(card)
+  return {
+    whatsapp: whatsappLink(long),
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(short)}`,
+    x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(short)}&url=${encodeURIComponent(url)}`,
+    threads: `https://www.threads.net/intent/post?text=${encodeURIComponent(`${short} ${url}`)}`,
+  }
+}
+
+const ICON_WA = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 12 12 0 0 0 4.6 4 5.3 5.3 0 0 0 3.2.7 2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3Z"/></svg>'
+const ICON_FB = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M13.5 22v-8h2.7l.4-3.2h-3.1V8.8c0-.9.3-1.6 1.6-1.6h1.7V4.4a22 22 0 0 0-2.5-.1c-2.5 0-4.1 1.5-4.1 4.2v2.3H7.4V14h2.8v8Z"/></svg>'
+const ICON_X = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M17.5 3h3l-6.8 7.8L21.7 21h-6.2l-4.8-6.3L5 21H2l7.3-8.3L1.6 3h6.3l4.4 5.8Zm-1.1 16.2h1.7L6.8 4.7H5Z"/></svg>'
+const ICON_THREADS = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12.2 22c-3 0-5.3-1-6.9-3-1.4-1.8-2.1-4.2-2.2-7v-.1c.1-2.8.8-5.2 2.2-7C6.9 3 9.2 2 12.2 2c2.3 0 4.2.6 5.7 1.8 1.3 1.1 2.2 2.6 2.7 4.5l-2 .5c-.7-2.8-2.9-4.6-6.4-4.6-2.3 0-4 .7-5.2 2.2-1.1 1.4-1.7 3.4-1.7 5.6 0 2.3.6 4.3 1.7 5.6 1.2 1.5 2.9 2.2 5.2 2.2 2 0 3.4-.5 4.3-1.5.8-.8 1-1.8.9-2.5-.1-.8-.5-1.4-1.1-1.9a7 7 0 0 0-.2 1.3c-.3 1.9-1.6 3-3.6 3.1-1.2.1-2.2-.3-3-1-.7-.7-1-1.6-1-2.6.1-1.9 1.5-3.2 3.8-3.4.9-.1 1.7 0 2.5.1v-.3c0-1-.3-1.7-.8-2.1-.5-.4-1.2-.6-2-.6-1.1 0-2.1.4-2.6 1.3l-1.7-1.1c.9-1.4 2.5-2.2 4.4-2.2 1.4 0 2.6.4 3.5 1.2.9.8 1.4 2 1.4 3.4v.9c1.5.8 2.4 2 2.6 3.5.2 1.6-.3 3.2-1.5 4.4-1.3 1.3-3.2 2-5.6 2Zm.5-8.5c-1.3.1-2 .6-2 1.4 0 .5.2.8.5 1 .4.3.9.4 1.5.4 1-.1 1.6-.5 1.8-1.5.1-.3.1-.7.1-1.1-.6-.2-1.2-.2-1.9-.2Z"/></svg>'
+const ICON_IG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 7.2a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6Zm0 7.9a3.1 3.1 0 1 1 0-6.2 3.1 3.1 0 0 1 0 6.2ZM17 5.9a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2ZM12 2.2c-2.7 0-3 0-4 .1a7 7 0 0 0-2.4.5 5 5 0 0 0-2.8 2.8 7 7 0 0 0-.5 2.4c-.1 1-.1 1.3-.1 4s0 3 .1 4a7 7 0 0 0 .5 2.4 5 5 0 0 0 2.8 2.8 7 7 0 0 0 2.4.5c1 .1 1.3.1 4 .1s3 0 4-.1a7 7 0 0 0 2.4-.5 5 5 0 0 0 2.8-2.8 7 7 0 0 0 .5-2.4c.1-1 .1-1.3.1-4s0-3-.1-4a7 7 0 0 0-.5-2.4 5 5 0 0 0-2.8-2.8 7 7 0 0 0-2.4-.5c-1-.1-1.3-.1-4-.1Zm0 1.8c2.7 0 3 0 4 .1.9 0 1.5.2 1.8.3a3.2 3.2 0 0 1 1.8 1.8c.1.3.3.9.3 1.8.1 1 .1 1.3.1 4s0 3-.1 4c0 .9-.2 1.5-.3 1.8a3.2 3.2 0 0 1-1.8 1.8c-.3.1-.9.3-1.8.3-1 .1-1.3.1-4 .1s-3 0-4-.1c-.9 0-1.5-.2-1.8-.3a3.2 3.2 0 0 1-1.8-1.8c-.1-.3-.3-.9-.3-1.8-.1-1-.1-1.3-.1-4s0-3 .1-4c0-.9.2-1.5.3-1.8a3.2 3.2 0 0 1 1.8-1.8c.3-.1.9-.3 1.8-.3 1-.1 1.3-.1 4-.1Z"/></svg>'
+
+// Menu bagikan: WhatsApp, Facebook, X, Threads (tautan), Instagram (gambar), simpan gambar.
+export function shareMenu(kind: 'status' | 'check', card: ShareCard, url: string) {
+  const links = shareLinks(card, url)
+  const link = (href: string, cls: string, icon: string, label: string) =>
+    `<a class="share-button ${cls}" href="${href}" target="_blank" rel="noreferrer noopener">${icon}<span>${label}</span></a>`
+  return `<div class="share-menu"><strong>Bagikan ke</strong><div class="share-row">
+    ${link(links.whatsapp, 'whatsapp', ICON_WA, 'WhatsApp')}
+    ${link(links.facebook, 'facebook', ICON_FB, 'Facebook')}
+    ${link(links.x, 'x', ICON_X, 'X')}
+    ${link(links.threads, 'threads', ICON_THREADS, 'Threads')}
+    <button type="button" class="share-button instagram" data-share="${kind}" data-share-target="instagram">${ICON_IG}<span>Instagram</span></button>
+    <button type="button" class="share-button plain" data-share="${kind}" data-share-target="image"><span>Simpan gambar</span></button>
+  </div><small class="share-hint" data-share-hint="${kind}"></small></div>`
 }
 
 export function shareText(card: ShareCard) {

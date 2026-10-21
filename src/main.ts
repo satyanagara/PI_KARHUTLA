@@ -2,7 +2,7 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, ispuLevel, levelRank, type Cluster, type IspuLevel } from './risk.ts'
-import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareText, streakText, vulnerableBlock, whatsappLink, type ShareCard } from './impact.ts'
+import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, vulnerableBlock, type ShareCard } from './impact.ts'
 import { levelIcon, levelMeter } from './icons.ts'
 import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
@@ -79,7 +79,7 @@ app.innerHTML = `
             <p class="impact-line" id="status-impact" hidden></p>
             <ul class="status-points" id="status-points"></ul>
             <div class="status-advice" id="status-advice" hidden><strong>Yang perlu dilakukan</strong><p id="status-advice-text"></p></div>
-            <div class="share-row" id="status-share" hidden><button type="button" class="share-button" data-share="status-image">Bagikan gambar</button><a class="share-button whatsapp" id="status-whatsapp" target="_blank" rel="noreferrer">Kirim ke WhatsApp</a></div>
+            <div id="status-share" hidden></div>
             <p class="status-emergency">Melihat api atau asap pekat di sekitar Anda? Hubungi <b>112</b> atau BPBD setempat.</p>
           </article>
           <article class="check-card" id="cek-lokasi">
@@ -356,7 +356,7 @@ function renderStatus(data: Report) {
     const streak = streakText(worstTown.unhealthyDays)
     impact.innerHTML = `Hari ini, menghirup udara di <b>${escapeHtml(worstTown.name)}</b> seharian setara mengisap <b class="impact-number">${cigaretteText(worstTown.pm25)}</b>, termasuk bagi bayi dan anak-anak${streak ? `, dan ini sudah <b>${streak}</b>` : ''}.<span class="impact-vulnerable">${VULNERABLE_SHORT}</span><small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small>`
     statusCard = { level: worstTown.level, place: `${worstTown.name}, ${worstTown.province}`, pm25: worstTown.pm25, streakDays: worstTown.unhealthyDays, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · ' + wibFormat.format(new Date(data.fetchedAt)) + ' WIB' }
-    byId<HTMLAnchorElement>('status-whatsapp').href = whatsappLink(shareText(statusCard))
+    byId('status-share').innerHTML = shareMenu('status', statusCard, `https://${location.host}/?cek=${worstTown.lat.toFixed(4)},${worstTown.lon.toFixed(4)}`)
   }
   byId('status-share').hidden = impact.hidden
 
@@ -869,7 +869,8 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
       ${reason}
       ${result.bmkg ? bmkgBlock(result.bmkg) : ''}
       <p class="check-advice"><b>${ISPU_ADVICE[result.level.key].meaning}</b> ${ISPU_ADVICE[result.level.key].action}</p>
-      <div class="share-row"><button type="button" class="share-button" data-share="check-image">Bagikan gambar</button><a class="share-button whatsapp" href="${whatsappLink(shareText(checkCard))}" target="_blank" rel="noreferrer">Kirim ke keluarga via WhatsApp</a><button type="button" class="check-map" id="check-map">Lihat di peta ↗</button></div>
+      ${shareMenu('check', checkCard, `https://${location.host}/?cek=${lat.toFixed(4)},${lon.toFixed(4)}`)}
+      <button type="button" class="check-map" id="check-map">Lihat di peta ↗</button>
     </div>`
   locationLayer.clearLayers()
   L.circleMarker([lat, lon], { radius: 9, color: '#1f5fbf', weight: 3, fillColor: '#ffffff', fillOpacity: 1 }).bindTooltip(escapeHtml(place)).addTo(locationLayer)
@@ -995,17 +996,30 @@ byId('cctv-grid').addEventListener('change', (event) => {
 document.addEventListener('click', (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-share]')
   if (!button) return
-  const card = button.dataset.share === 'status-image' ? statusCard : checkCard
+  const kind = button.dataset.share
+  const card = kind === 'status' ? statusCard : checkCard
   if (!card) return
-  const original = button.textContent
+  const label = button.querySelector('span')
+  const original = label?.textContent ?? ''
+  const hint = document.querySelector<HTMLElement>(`[data-share-hint="${kind}"]`)
   button.disabled = true
-  button.textContent = 'Menyiapkan gambar…'
+  if (label) label.textContent = 'Menyiapkan gambar…'
   const slug = card.place.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
   shareCardImage(card, `amukapi-${slug}.png`, shareText(card))
-    .catch((error) => console.warn('Gagal membagikan gambar:', error))
+    .then((result) => {
+      if (!hint) return
+      // Instagram tidak punya tautan bagikan web: gambarnya diunggah manual ke Story/Feed.
+      hint.textContent = result === 'downloaded'
+        ? (button.dataset.shareTarget === 'instagram' ? 'Gambar tersimpan. Buka Instagram, lalu unggah ke Story atau Feed.' : 'Gambar tersimpan.')
+        : ''
+    })
+    .catch((error) => {
+      console.warn('Gagal membagikan gambar:', error)
+      if (hint) hint.textContent = 'Gambar tidak dapat dibuat di peramban ini.'
+    })
     .finally(() => {
       button.disabled = false
-      button.textContent = original
+      if (label) label.textContent = original
     })
 })
 
@@ -1043,5 +1057,11 @@ setInterval(() => {
 new ResizeObserver(() => map.invalidateSize()).observe(byId('fire-map'))
 syncControls()
 void refreshData()
+// Tautan bagikan membawa ?cek=lat,lon: langsung jalankan cek lokasi untuk titik itu.
+const shared = params.get('cek')?.split(',').map(Number) ?? []
+if (shared.length === 2 && shared.every(Number.isFinite) && shared[0] >= -12 && shared[0] <= 7 && shared[1] >= 93 && shared[1] <= 143) {
+  byId('cek-lokasi').scrollIntoView()
+  void runCheck(shared[0], shared[1], 'lokasi yang dibagikan')
+}
 void loadBnpb()
 void loadCctv()
