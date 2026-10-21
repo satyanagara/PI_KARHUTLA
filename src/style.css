@@ -1125,6 +1125,261 @@ h1 span {
   color: var(--fire);
 }
 
+/* ---------- Ikon tingkat bahaya & dampak ---------- */
+
+.level-icon {
+  flex: none;
+  display: block;
+}
+
+.status-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-top h2 {
+  margin-top: 6px;
+}
+
+.status-icon .level-icon {
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.18));
+}
+
+.level-icon-berbahaya {
+  animation: pulse-danger 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse-danger {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+.impact-line {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgb(192 57 43 / 0.08);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.impact-line small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.impact-number {
+  font-size: 1.35em;
+  color: #c0392b;
+  white-space: nowrap;
+}
+
+.ispu-badge.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 4px;
+}
+
+.ispu-legend span .level-icon,
+.ispu-guide-item .level-icon {
+  flex: none;
+}
+
+.level-meter {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.level-meter-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.4;
+}
+
+.level-meter-step i {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--level);
+}
+
+.level-meter-step small {
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.level-meter-step.active {
+  opacity: 1;
+}
+
+.level-meter-step.active i {
+  height: 14px;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--level);
+}
+
+.level-meter-step.active small {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.check-head {
+  align-items: center;
+  gap: 12px;
+}
+
+.check-head > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.check-head small {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.impact-vulnerable {
+  display: block;
+  margin-top: 6px;
+  font-weight: 600;
+  color: #9b2c1f;
+}
+
+.vulnerable {
+  padding: 12px 14px;
+  border-left: 4px solid #c0392b;
+  border-radius: 10px;
+  background: #fbefec;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.vulnerable.mild {
+  border-left-color: var(--level);
+  background: var(--surface-strong);
+}
+
+.vulnerable strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #9b2c1f;
+}
+
+.vulnerable.mild strong {
+  color: var(--ink);
+}
+
+.vulnerable ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+.vulnerable p {
+  margin: 0;
+}
+
+.danger-signs {
+  padding-top: 8px;
+  border-top: 1px dashed #e3b4ac;
+  font-weight: 600;
+}
+
+.safety-steps {
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--level) 35%, var(--line));
+  border-radius: 10px;
+  background: var(--surface-strong);
+}
+
+.safety-steps strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.safety-steps ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.safety-steps label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.safety-steps input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: #3f9a5c;
+}
+
+.safety-steps input:checked + span {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.share-row[hidden] {
+  display: none;
+}
+
+.share-button {
+  padding: 8px 12px;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  background: var(--ink);
+  color: #f4f7f2;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.share-button.whatsapp {
+  border-color: #1f8f4e;
+  background: #25d366;
+  color: #08331c;
+}
+
+.share-button:disabled {
+  opacity: 0.6;
+}
+
+.ispu-guide-item > .level-icon {
+  margin-bottom: 2px;
+}
+
 /* ---------- Statistik ---------- */
 
 .stats-grid {

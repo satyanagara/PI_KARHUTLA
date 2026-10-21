@@ -30,7 +30,12 @@ export type Cluster = {
   smoke?: Smoke
 }
 
-export type SmokeReading = { pm25Now: number | null; pm25Mean24: number | null; pm25Max24: number | null; windKmh: number; windFrom: number }
+// unhealthyDays: berapa periode 24 jam berturut-turut (berakhir sekarang, maks. 7) yang rata-rata PM2.5-nya ≥ 55,5 µg/m³.
+export type SmokeReading = { pm25Now: number | null; pm25Mean24: number | null; pm25Max24: number | null; windKmh: number; windFrom: number; unhealthyDays: number }
+
+// Perkiraan setara rokok: PM2.5 22 µg/m³ selama 24 jam ≈ 1 batang rokok (Berkeley Earth, Muller & Muller 2015).
+export const PM25_PER_CIGARETTE = 22
+export const cigarettesPerDay = (pm25: number | null) => (pm25 === null ? null : pm25 / PM25_PER_CIGARETTE)
 
 export type Smoke = SmokeReading & {
   heading: number

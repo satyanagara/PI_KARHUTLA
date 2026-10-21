@@ -2,6 +2,8 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, ispuLevel, levelRank, type Cluster, type IspuLevel } from './risk.ts'
+import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareText, streakText, vulnerableBlock, whatsappLink, type ShareCard } from './impact.ts'
+import { levelIcon, levelMeter } from './icons.ts'
 import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
 const sourceNames: Record<Source, string> = {
@@ -71,10 +73,13 @@ app.innerHTML = `
         <section class="status-section" aria-label="Status risiko saat ini">
           <article class="status-card" id="status-card" style="--level:#9aa69f">
             <div class="status-kicker">STATUS RISIKO SAAT INI</div>
-            <div class="status-level"><span class="status-pill" id="status-pill">Memuat…</span><span class="status-scope" id="status-scope"></span></div>
-            <h2 id="status-headline">Mengambil data satelit terbaru…</h2>
+            <div class="status-top"><span class="status-icon" id="status-icon">${levelIcon('na', 72)}</span>
+              <div><div class="status-level"><span class="status-pill" id="status-pill">Memuat…</span><span class="status-scope" id="status-scope"></span></div>
+              <h2 id="status-headline">Mengambil data satelit terbaru…</h2></div></div>
+            <p class="impact-line" id="status-impact" hidden></p>
             <ul class="status-points" id="status-points"></ul>
             <div class="status-advice" id="status-advice" hidden><strong>Yang perlu dilakukan</strong><p id="status-advice-text"></p></div>
+            <div class="share-row" id="status-share" hidden><button type="button" class="share-button" data-share="status-image">Bagikan gambar</button><a class="share-button whatsapp" id="status-whatsapp" target="_blank" rel="noreferrer">Kirim ke WhatsApp</a></div>
             <p class="status-emergency">Melihat api atau asap pekat di sekitar Anda? Hubungi <b>112</b> atau BPBD setempat.</p>
           </article>
           <article class="check-card" id="cek-lokasi">
@@ -162,7 +167,7 @@ app.innerHTML = `
           </article>
           <div class="risk-panels">
             <article class="data-panel priority-panel">
-              <div class="panel-heading"><div><div class="section-kicker">DIURUTKAN DARI YANG PALING BERISIKO</div><h2>Wilayah api paling berisiko</h2></div><div class="ispu-legend">${ISPU_LEVELS.map((level) => `<span><i style="background:${level.color}"></i>${level.label}</span>`).join('')}</div></div>
+              <div class="panel-heading"><div><div class="section-kicker">DIURUTKAN DARI YANG PALING BERISIKO</div><h2>Wilayah api paling berisiko</h2></div><div class="ispu-legend">${ISPU_LEVELS.map((level) => `<span>${levelIcon(level.key, 16)}${level.label}</span>`).join('')}</div></div>
               <div class="table-wrap"><table class="priority-table"><colgroup><col class="col-rank" /><col class="col-cluster" /><col class="col-count" /><col class="col-settlement" /><col class="col-area" /><col class="col-air" /><col class="col-wind" /></colgroup><thead><tr><th>#</th><th>WILAYAH API</th><th>JUMLAH TITIK · KEKUATAN</th><th>PERMUKIMAN TERDEKAT</th><th>KAWASAN HUTAN</th><th>KUALITAS UDARA</th><th>ARAH &amp; JANGKAUAN ASAP</th></tr></thead><tbody id="priority-rows"><tr><td colspan="7" class="empty-row">Analisis tampil setelah data hotspot dimuat.</td></tr></tbody></table></div>
               <div class="table-foot"><span>Wilayah api = kumpulan titik panas dalam radius ±20 km. Klik baris untuk melihatnya di peta.</span></div>
             </article>
@@ -215,7 +220,7 @@ app.innerHTML = `
         <section class="about-section ispu-guide" aria-label="Arti warna kualitas udara">
           <div class="section-kicker">PANDUAN KUALITAS UDARA (ISPU)</div>
           <h2>Arti warna &amp; apa yang harus dilakukan</h2>
-          <div class="ispu-guide-grid">${ISPU_LEVELS.map((level) => `<div class="ispu-guide-item" style="--level:${level.color}"><span class="ispu-badge ${level.key}">${level.label}</span><p><b>${ISPU_ADVICE[level.key].meaning}</b> ${ISPU_ADVICE[level.key].action}</p></div>`).join('')}</div>
+          <div class="ispu-guide-grid">${ISPU_LEVELS.map((level) => `<div class="ispu-guide-item" style="--level:${level.color}">${levelIcon(level.key, 48)}<span class="ispu-badge ${level.key}">${level.label}</span><p><b>${ISPU_ADVICE[level.key].meaning}</b> ${ISPU_ADVICE[level.key].action}</p></div>`).join('')}</div>
         </section>
 
         <section class="about-section" id="about">
@@ -228,6 +233,7 @@ app.innerHTML = `
             <div><h3>Prakiraan BMKG</h3><p>Prakiraan cuaca per desa (kondisi, angin, suhu, kelembapan, jarak pandang, termasuk prakiraan "Kabut/Asap" dan "Udara Kabur") diambil dari <a href="https://data.bmkg.go.id/prakiraan-cuaca/" target="_blank" rel="noreferrer">API prakiraan cuaca BMKG</a> untuk desa terdekat, memakai kode wilayah Kemendagri. Sumber: BMKG (Badan Meteorologi, Klimatologi, dan Geofisika).</p></div>
             <div><h3>Asap &amp; ISPU</h3><p>Titik dikelompokkan per ±20 km. Untuk 30 kluster teratas, angin dan PM2.5 diambil dari <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (model CAMS). Kategori mengikuti ISPU PM2.5 rata-rata 24 jam (PermenLHK P.14/2020). Jalur asap adalah kerucut 6 jam searah angin.</p></div>
             <div><h3>Sumber panas tetap</h3><p>Titik yang terdeteksi pada ≥3 hari berbeda dalam 5 hari terakhir di tempat yang sama (±440 m) dan dekat permukiman ditandai abu-abu sebagai kemungkinan pabrik, pembangkit, atau pembakaran berulang, lalu tidak dihitung dalam analisis risiko. Titik tetap tampil di peta dan CSV. Titik di lahan gambut atau kawasan hutan tidak pernah ditandai.</p></div>
+            <div><h3>Kesehatan & setara rokok</h3><p>Ancaman bagi anak-anak, lansia, dan ibu hamil disarikan dari panduan WHO dan Kementerian Kesehatan tentang asap kebakaran dan PM2.5. Setara rokok memakai perkiraan Berkeley Earth: PM2.5 22 µg/m³ selama sehari ≈ 1 batang rokok. Keduanya untuk memberi gambaran, bukan diagnosis; ikuti arahan tenaga kesehatan setempat.</p></div>
             <div><h3>Istilah</h3><p><b>Titik panas</b>: lokasi yang jauh lebih panas dari sekitarnya menurut satelit, umumnya api. <b>FRP</b>: kekuatan api dalam megawatt. <b>PM2.5</b>: partikel asap halus yang masuk ke paru-paru. <b>ISPU</b>: Indeks Standar Pencemar Udara. <b>KHG</b>: Kesatuan Hidrologis Gambut.</p></div>
             <div><h3>Batasan</h3><p>Hotspot bukan konfirmasi kebakaran, kualitas udara berasal dari model, dan batas kawasan dapat berbeda dari kondisi lapangan. Gunakan sebagai peringatan dini, bukan pengganti verifikasi lapangan.</p></div>
           </div>
@@ -300,7 +306,7 @@ function clusterSentence(cluster: Cluster) {
 }
 
 function levelPill(level: IspuLevel) {
-  return `<span class="ispu-badge ${level.key}" style="--level:${level.color}">${level.label}</span>`
+  return `<span class="ispu-badge with-icon ${level.key}" style="--level:${level.color}">${levelIcon(level.key, 16)}${level.label}</span>`
 }
 
 function renderStatus(data: Report) {
@@ -312,6 +318,7 @@ function renderStatus(data: Report) {
   const points: string[] = []
   let headline: string
 
+  byId('status-icon').innerHTML = levelIcon(worst?.key ?? (summary.total ? 'na' : 'baik'), 72)
   if (!summary.total) {
     card.style.setProperty('--level', '#3f9a5c')
     byId('status-pill').textContent = 'Tidak ada titik api'
@@ -341,10 +348,25 @@ function renderStatus(data: Report) {
   }
   byId('status-points').innerHTML = points.map((point) => `<li>${point}</li>`).join('')
 
+  // Kota terdampak dengan udara terburuk: disampaikan dalam setara rokok dan hari berturut-turut.
+  const worstTown = [...data.exposedTowns].filter((town) => town.pm25 !== null).sort((a, b) => (b.pm25 ?? 0) - (a.pm25 ?? 0))[0]
+  const impact = byId('status-impact')
+  impact.hidden = !worstTown || !UNHEALTHY_LEVELS.includes(worstTown.level.key)
+  if (worstTown && !impact.hidden) {
+    const streak = streakText(worstTown.unhealthyDays)
+    impact.innerHTML = `Hari ini, menghirup udara di <b>${escapeHtml(worstTown.name)}</b> seharian setara mengisap <b class="impact-number">${cigaretteText(worstTown.pm25)}</b>, termasuk bagi bayi dan anak-anak${streak ? `, dan ini sudah <b>${streak}</b>` : ''}.<span class="impact-vulnerable">${VULNERABLE_SHORT}</span><small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small>`
+    statusCard = { level: worstTown.level, place: `${worstTown.name}, ${worstTown.province}`, pm25: worstTown.pm25, streakDays: worstTown.unhealthyDays, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · ' + wibFormat.format(new Date(data.fetchedAt)) + ' WIB' }
+    byId<HTMLAnchorElement>('status-whatsapp').href = whatsappLink(shareText(statusCard))
+  }
+  byId('status-share').hidden = impact.hidden
+
   const advice = byId('status-advice')
   advice.hidden = !worst
   if (worst) byId('status-advice-text').textContent = `Bila Anda berada di daerah berstatus ${worst.label.toLowerCase()}: ${ISPU_ADVICE[worst.key].action}`
 }
+
+let statusCard: ShareCard | null = null
+let checkCard: ShareCard | null = null
 
 // ---------- Prakiraan BMKG ----------
 
@@ -420,7 +442,7 @@ function renderBnpb(data: BnpbReport) {
     const level = bnpbLevel(province.airQuality)
     return `
     <article class="bnpb-card" style="--level:${level.color}">
-      <div class="bnpb-head"><h3>${escapeHtml(province.province)}</h3><span class="ispu-badge ${level.key}">${escapeHtml(province.airQuality || 'Tidak dilaporkan')}</span></div>
+      <div class="bnpb-head"><h3>${escapeHtml(province.province)}</h3><span class="ispu-badge with-icon ${level.key}" style="--level:${level.color}">${levelIcon(level.key, 16)}${escapeHtml(province.airQuality || 'Tidak dilaporkan')}</span></div>
       <dl class="bnpb-stats">
         <div><dt>Titik api terverifikasi</dt><dd>${province.fireSpots ?? '–'}</dd></div>
         <div><dt>Terbakar hari ini</dt><dd>${hectare(province.burnedTodayHa)}</dd></div>
@@ -770,17 +792,17 @@ const checkInput = byId<HTMLInputElement>('check-input')
 const suggestions = byId<HTMLUListElement>('check-suggestions')
 const checkResult = byId('check-result')
 const locationLayer = L.layerGroup().addTo(map)
-let suggestionItems: { name: string; label: string; province: string; lat: number; lon: number }[] = []
+let suggestionItems: { name: string; label: string; province: string; lat: number; lon: number; level?: number }[] = []
 let searchTimer = 0
 
-async function runCheck(lat: number, lon: number, label: string) {
+async function runCheck(lat: number, lon: number, label: string, preferredLabel?: string) {
   suggestions.hidden = true
   checkResult.innerHTML = `<p class="check-loading">Memeriksa ${escapeHtml(label)}…</p>`
   try {
     const response = await fetch(`/api/lokasi?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&source=${activeSource}&days=${activeDays}`)
     const body = await response.json().catch(() => null)
     if (!response.ok) throw new Error(body?.error ?? `Server merespons ${response.status}`)
-    renderCheck(body as LocationCheck, lat, lon, label)
+    renderCheck(body as LocationCheck, lat, lon, label, preferredLabel)
   } catch (error) {
     checkResult.innerHTML = `<p class="check-error">${escapeHtml(error instanceof Error ? error.message : 'Pemeriksaan gagal.')}</p>`
   }
@@ -809,7 +831,7 @@ function statusReason(result: LocationCheck) {
   return `<div class="check-reason"><strong>Kenapa statusnya begini?</strong><ul>${points.map((point) => `<li>${point}</li>`).join('')}</ul></div>`
 }
 
-function renderCheck(result: LocationCheck, lat: number, lon: number, label: string) {
+function renderCheck(result: LocationCheck, lat: number, lon: number, label: string, preferredLabel?: string) {
   const period = result.days === 1 ? '24 jam terakhir' : `${result.days} hari terakhir`
   const fire = result.nearestFire
   const lines: string[] = []
@@ -828,16 +850,26 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
   if (result.air) {
     lines.push(`Perkiraan PM2.5 rata-rata 24 jam: <b>${formatPm(result.air.pm25Mean24)}</b>, puncak 24 jam ke depan ${formatPm(result.air.pm25Max24)}. Angin ${result.air.windKmh.toFixed(0)} km/jam ke ${compassName((result.air.windFrom + 180) % 360)}.`)
   }
-  const place = result.place ? `${result.place.name}${result.place.province ? `, ${result.place.province}` : ''}` : label
+  // Bila yang dicari kota/kabupaten/kecamatan, tampilkan nama itu, bukan desa terdekat dari titik tengahnya.
+  const place = preferredLabel ?? (result.place ? `${result.place.name}${result.place.province ? `, ${result.place.province}` : ''}` : label)
   const reason = statusReason(result)
+  // Nilai yang disampaikan ke warga: asap di jalur bila lebih buruk, selain itu model di titik ini.
+  const pm25 = result.air?.pm25Mean24 ?? null
+  const cigarettes = cigaretteText(pm25)
+  const streak = streakText(result.air?.unhealthyDays ?? 0)
+  checkCard = { level: result.level, place, pm25, streakDays: result.air?.unhealthyDays ?? 0, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · prakiraan BMKG' }
   checkResult.innerHTML = `
     <div class="check-summary" style="--level:${result.level.color}">
-      <div class="check-head">${levelPill(result.level)}<strong>${escapeHtml(place)}</strong></div>
+      <div class="check-head">${levelIcon(result.level.key, 52)}<div><small>Udara yang Anda hirup hari ini di</small><strong>${escapeHtml(place)}</strong>${levelPill(result.level)}</div></div>
+      ${levelMeter(result.level.key)}
+      ${cigarettes ? `<p class="impact-line">Menghirup udara ini seharian setara mengisap <b class="impact-number">${cigarettes}</b>, termasuk bagi bayi dan anak-anak${streak && UNHEALTHY_LEVELS.includes(result.level.key) ? `. Udara tidak sehat <b>${streak}</b>` : ''}.<small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small></p>` : ''}
+      ${vulnerableBlock(result.level)}
+      ${checklist(result.level, 'langkah-cek')}
       <ul>${lines.map((line) => `<li>${line}</li>`).join('')}</ul>
       ${reason}
       ${result.bmkg ? bmkgBlock(result.bmkg) : ''}
       <p class="check-advice"><b>${ISPU_ADVICE[result.level.key].meaning}</b> ${ISPU_ADVICE[result.level.key].action}</p>
-      <button type="button" class="check-map" id="check-map">Lihat di peta ↗</button>
+      <div class="share-row"><button type="button" class="share-button" data-share="check-image">Bagikan gambar</button><a class="share-button whatsapp" href="${whatsappLink(shareText(checkCard))}" target="_blank" rel="noreferrer">Kirim ke keluarga via WhatsApp</a><button type="button" class="check-map" id="check-map">Lihat di peta ↗</button></div>
     </div>`
   locationLayer.clearLayers()
   L.circleMarker([lat, lon], { radius: 9, color: '#1f5fbf', weight: 3, fillColor: '#ffffff', fillOpacity: 1 }).bindTooltip(escapeHtml(place)).addTo(locationLayer)
@@ -870,7 +902,7 @@ suggestions.addEventListener('click', (event) => {
   const item = button && suggestionItems[Number(button.dataset.place)]
   if (!item) return
   checkInput.value = item.name
-  void runCheck(item.lat, item.lon, item.name)
+  void runCheck(item.lat, item.lon, item.name, item.level && item.level <= 3 ? item.label : undefined)
 })
 
 byId<HTMLFormElement>('check-form').addEventListener('submit', (event) => {
@@ -878,7 +910,7 @@ byId<HTMLFormElement>('check-form').addEventListener('submit', (event) => {
   const first = suggestionItems[0]
   if (first) {
     checkInput.value = first.name
-    void runCheck(first.lat, first.lon, first.name)
+    void runCheck(first.lat, first.lon, first.name, first.level && first.level <= 3 ? first.label : undefined)
   }
 })
 
@@ -958,6 +990,23 @@ byId('cctv-grid').addEventListener('change', (event) => {
   const frame = byId('cctv-grid').querySelector<HTMLElement>(`[data-cctv-frame="${index}"]`)
   const label = `${cctvData?.youtube[Number(index)]?.city ?? ''} ${select.selectedOptions[0]?.textContent ?? ''}`
   if (frame) frame.innerHTML = cctvPlayer(select.value, label)
+})
+
+document.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-share]')
+  if (!button) return
+  const card = button.dataset.share === 'status-image' ? statusCard : checkCard
+  if (!card) return
+  const original = button.textContent
+  button.disabled = true
+  button.textContent = 'Menyiapkan gambar…'
+  const slug = card.place.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+  shareCardImage(card, `amukapi-${slug}.png`, shareText(card))
+    .catch((error) => console.warn('Gagal membagikan gambar:', error))
+    .finally(() => {
+      button.disabled = false
+      button.textContent = original
+    })
 })
 
 byId('priority-rows').addEventListener('click', (event) => {

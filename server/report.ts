@@ -131,20 +131,30 @@ async function fetchSmoke(points: { lat: number; lon: number }[]) {
     const latitude = missing.map(({ lat }) => lat.toFixed(3)).join(',')
     const longitude = missing.map(({ lon }) => lon.toFixed(3)).join(',')
     const [air, wind] = await Promise.all([
-      getJson(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=pm2_5&hourly=pm2_5&past_days=1&forecast_days=2&timezone=GMT`),
+      getJson(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=pm2_5&hourly=pm2_5&past_days=7&forecast_days=2&timezone=GMT`),
       getJson(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=kmh&timezone=GMT`),
     ])
     missing.forEach(({ lat, lon }, index) => {
       const hourly = air[index]?.hourly ?? { time: [], pm2_5: [] }
       const past: number[] = []
       const next: number[] = []
+      // Tujuh periode 24 jam ke belakang dari sekarang, untuk menghitung hari berturut-turut udara tidak sehat.
+      const windows: number[][] = Array.from({ length: 7 }, () => [])
       hourly.time.forEach((time: string, hour: number) => {
         const value = hourly.pm2_5[hour]
         if (typeof value !== 'number') return
         const at = Date.parse(`${time}Z`)
         if (at <= now && at > now - 24 * 3600 * 1000) past.push(value)
         if (at > now && at <= now + 24 * 3600 * 1000) next.push(value)
+        const window = Math.floor((now - at) / (24 * 3600 * 1000))
+        if (at <= now && window < 7) windows[window].push(value)
       })
+      let unhealthyDays = 0
+      for (const values of windows) {
+        const mean = meanOf(values)
+        if (mean === null || mean < 55.5) break
+        unhealthyDays++
+      }
       smokeCache.set(smokeKey(lat, lon), {
         at: now,
         reading: {
@@ -153,6 +163,7 @@ async function fetchSmoke(points: { lat: number; lon: number }[]) {
           pm25Max24: next.length ? Math.max(...next) : null,
           windKmh: wind[index]?.current?.wind_speed_10m ?? 0,
           windFrom: wind[index]?.current?.wind_direction_10m ?? 0,
+          unhealthyDays,
         },
       })
     })
@@ -406,6 +417,8 @@ async function buildReport(source: Source, days: number): Promise<Report> {
         lon: town.lon,
         level: smoke.level,
         pm25: smoke.pm25Mean24 ?? smoke.pm25Now,
+        population: town.population,
+        unhealthyDays: smoke.unhealthyDays,
         fireKm: round(distanceKm(town.lat, town.lon, cluster.lat, cluster.lon), 1),
         fireDirection: compassName(bearing(town.lat, town.lon, cluster.lat, cluster.lon)),
       })
