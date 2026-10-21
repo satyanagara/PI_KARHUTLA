@@ -33,8 +33,9 @@ const SMOKE_CLUSTERS = 30
 const PRIORITY_CLUSTERS = 30
 const FIRMS_AREA = '94,-11,142,6'
 
-type Reference = { settlements: SettlementIndex; areas: AreaIndex; peat: AreaIndex; regencies: AreaIndex; provinces: AreaIndex; regencyProvince: Map<string, string> }
+export type Reference = { settlements: SettlementIndex; areas: AreaIndex; peat: AreaIndex; regencies: AreaIndex; provinces: AreaIndex; regencyProvince: Map<string, string> }
 let reference: Reference | null = null
+export const getReference = () => reference
 
 // Permukiman: GeoNames. Kawasan hutan (konservasi & lindung) dan KHG gambut: Kementerian Kehutanan (SIGAP).
 export async function loadReference(dataDir: string) {
@@ -58,26 +59,29 @@ export async function loadReference(dataDir: string) {
 
 // ---------- NASA FIRMS ----------
 
-function parseCsv(text: string): Fire[] {
+// keep: bila diisi, hanya kolom itu yang disimpan (hemat memori untuk rentang waktu panjang).
+function parseCsv(text: string, keep?: string[]): Fire[] {
   const lines = text.trim().split(/\r?\n/)
   if (lines.length < 1 || !lines[0].toLowerCase().startsWith('latitude,longitude')) {
     throw new Error(`FIRMS: ${text.trim().slice(0, 200) || 'respons kosong'}`)
   }
   const headers = lines[0].split(',').map((value) => value.trim())
+  const wanted = headers.map((header, index) => [header, index] as const).filter(([header]) => !keep || keep.includes(header))
   return lines.slice(1).filter(Boolean).map((line) => {
     const values = line.split(',')
-    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? '']))
+    return Object.fromEntries(wanted.map(([header, index]) => [header, values[index] ?? '']))
   })
 }
 
-async function fetchFirms(source: Source, days: number) {
+// startDate (YYYY-MM-DD, UTC) opsional: data dari tanggal itu selama `days` hari (FIRMS mengizinkan maksimal 5 hari per permintaan).
+export async function fetchFirms(source: Source, days: number, startDate?: string, keep?: string[]) {
   const key = process.env.FIRMS_MAP_KEY
   if (!key) throw new Error('Server belum dikonfigurasi: FIRMS_MAP_KEY kosong.')
-  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/${source}/${FIRMS_AREA}/${days}`
+  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/${source}/${FIRMS_AREA}/${days}${startDate ? `/${startDate}` : ''}`
   const response = await fetch(url, { signal: AbortSignal.timeout(30000) })
   const body = await response.text()
   if (!response.ok) throw new Error(`FIRMS (${response.status}): ${body.slice(0, 200)}`)
-  return parseCsv(body)
+  return parseCsv(body, keep)
 }
 
 // ---------- SiPongi (BRIN/LAPAN) ----------
@@ -196,14 +200,17 @@ const PERSIST_MIN_DAYS = 3
 const HISTORY_TTL_MS = 30 * 60 * 1000
 type History = Map<string, Set<string>>
 const histories = new Map<'NASA' | 'BRIN_LAPAN', { at: number; history: Promise<History> }>()
-const NASA_SOURCES: Source[] = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT']
+export const NASA_SOURCES: Source[] = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT']
 
 // Gabungan ketiga satelit VIIRS. Api yang sama sering terekam oleh lebih dari satu satelit dalam satu lintasan
 // siang/malam dengan posisi piksel bergeser beberapa ratus meter. Deteksi dari satelit LAIN pada tanggal dan
 // siang/malam yang sama di sel ±440 m yang sama atau bertetangga dianggap api yang sama (diambil FRP tertinggi).
 // Deteksi dari satelit yang sama tidak digabung, karena itu memang piksel api yang berbeda.
 async function fetchAllViirs(days: number): Promise<Fire[]> {
-  const sets = await Promise.all(NASA_SOURCES.map((item) => fetchFirms(item, days)))
+  return mergeViirs(await Promise.all(NASA_SOURCES.map((item) => fetchFirms(item, days))))
+}
+
+export function mergeViirs(sets: Fire[][]): Fire[] {
   const kept: Fire[] = []
   const index = new Map<string, { at: number; satellite: string }[]>()
   sets.forEach((rows, satellite) => {

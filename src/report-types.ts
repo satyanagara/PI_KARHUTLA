@@ -122,3 +122,7 @@ export type BmkgForecast = {
   hazeNext24: { time: string; description: string }[]
   fetchedAt: string
 }
+
+// Jumlah titik panas harian (hari menurut WIB), gabungan tiga satelit VIIRS, seluruh Indonesia.
+export type TimelineDay = { date: string; total: number; peat: number; high: number }
+export type TimelineReport = { fetchedAt: string; today: string; days: TimelineDay[] }

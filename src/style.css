@@ -1506,6 +1506,163 @@ h1 span {
   margin-bottom: 2px;
 }
 
+/* ---------- Tren harian ---------- */
+
+.timeline-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  scroll-margin-top: 80px;
+}
+
+.timeline-panel .panel-heading {
+  margin-bottom: 0;
+}
+
+.trend-chip {
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+
+.trend-chip[hidden] {
+  display: none;
+}
+
+.trend-chip.up {
+  background: var(--fire-soft);
+  color: #9b3520;
+}
+
+.trend-chip.down {
+  background: var(--moss-soft);
+  color: #2f6b49;
+}
+
+.timeline-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.timeline-chart .chart-empty {
+  min-height: 160px;
+}
+
+.tl-grid {
+  stroke: var(--line-soft);
+  stroke-width: 1;
+}
+
+.tl-axis {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  fill: var(--ink-soft);
+}
+
+.tl-axis.dim {
+  font-size: 9px;
+  fill: var(--ink-faint);
+}
+
+.tl-peak {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+
+.tl-peat {
+  fill: #8a5a2b;
+}
+
+.tl-other {
+  fill: var(--fire);
+}
+
+.tl-bar rect {
+  transition: opacity 0.15s;
+}
+
+.tl-bar:hover rect:not([fill='transparent']),
+.tl-bar:focus rect:not([fill='transparent']) {
+  opacity: 0.8;
+}
+
+.tl-bar:focus {
+  outline: none;
+}
+
+.tl-bar.partial .tl-peat,
+.tl-bar.partial .tl-other {
+  opacity: 0.45;
+  stroke: var(--ink-faint);
+  stroke-dasharray: 3 2;
+}
+
+.tl-avg {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.timeline-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.swatch.other {
+  background: var(--fire);
+}
+
+.swatch.peat {
+  background: #8a5a2b;
+}
+
+.swatch.avg {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.swatch.partial {
+  border: 1px dashed var(--ink-faint);
+  background: rgb(223 89 60 / 0.4);
+}
+
+.timeline-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
 /* ---------- Statistik ---------- */
 
 .stats-grid {

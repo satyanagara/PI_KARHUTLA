@@ -14,6 +14,7 @@ import { loadWilayah } from './wilayah.ts'
 import { getBnpbReport } from './bnpb.ts'
 import { getCctv } from './cctv.ts'
 import { prepareOg, renderOgPng } from './og.ts'
+import { getTimeline, startTimeline } from './timeline.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
 
 // Server tanpa IPv6: dahulukan IPv4 dan beri waktu cukup per percobaan koneksi. Batas bawaan Node (250 ms)
@@ -314,6 +315,15 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/hotspots') return allowed(req, res) && (await handleHotspots(req, res, url))
     if (url.pathname === '/api/lokasi') return allowed(req, res) && (await handleLocation(req, res, url))
     if (url.pathname === '/og/cek.png') return allowed(req, res) && (await handleOgImage(req, res, url))
+    if (url.pathname === '/api/timeline') {
+      if (!allowed(req, res)) return
+      const timeline = getTimeline()
+      if ('building' in timeline) {
+        res.writeHead(202, { ...SECURITY_HEADERS, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '20' })
+        return res.end(JSON.stringify(timeline))
+      }
+      return sendJson(req, res, timeline, 'public, max-age=600')
+    }
     if (url.pathname === '/ga.js') {
       if (!GA_ID) return sendError(res, 404, 'Analytics tidak diaktifkan.')
       return send(req, res, compress(Buffer.from(GA_SCRIPT), MIME['.js']), 'public, max-age=3600')
@@ -373,6 +383,7 @@ if (!process.env.FIRMS_MAP_KEY) console.warn('[server] PERINGATAN: FIRMS_MAP_KEY
 console.log(GA_ID ? `[server] Google Analytics aktif (${GA_ID})` : '[server] Google Analytics tidak aktif (GA_MEASUREMENT_ID kosong)')
 server.listen(PORT, HOST, () => console.log(`[server] berjalan di http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))
 // Hangatkan laporan bawaan saat start agar permintaan pertama (termasuk perayap pratinjau media sosial) tidak menunggu lama.
+void startTimeline()
 getReport(DEFAULT_SOURCE as Source, 3)
   .then(() => console.log('[server] laporan bawaan siap'))
   .catch((error) => console.error('[server] pemanasan laporan gagal:', error instanceof Error ? error.message : error))

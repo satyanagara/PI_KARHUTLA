@@ -5,7 +5,7 @@ import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compas
 import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, trashEquivalent, vulnerableBlock, type ShareCard } from './impact.ts'
 import { levelIcon, levelMeter } from './icons.ts'
 import { footballFields, prognosis, speciesText, visibilityComparison, wildlifeFor } from './context.ts'
-import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
+import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type TimelineDay, type TimelineReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
 const sourceNames: Record<Source, string> = {
   VIIRS_ALL: 'Gabungan VIIRS · 3 satelit NASA',
@@ -125,6 +125,13 @@ app.innerHTML = `
             <div class="status-value" id="monitor-status">Memuat…</div>
             <div class="stat-foot"><span class="stat-note" id="source-summary">Menghubungi server</span></div>
           </article>
+        </section>
+
+        <section class="timeline-panel" id="timeline" aria-label="Tren titik panas harian">
+          <div class="panel-heading"><div><div class="section-kicker">TREN HARIAN · GABUNGAN 3 SATELIT VIIRS</div><h2>Titik panas 2 minggu terakhir</h2></div><span class="trend-chip" id="trend-chip" hidden></span></div>
+          <div class="timeline-chart" id="timeline-chart"><div class="chart-empty">Memuat tren harian…</div></div>
+          <div class="timeline-legend"><span><i class="swatch other"></i> Bukan lahan gambut</span><span><i class="swatch peat"></i> Lahan gambut</span><span><i class="swatch avg"></i> Rata-rata 7 hari</span><span><i class="swatch partial"></i> Hari ini (belum lengkap)</span></div>
+          <p class="timeline-note" id="timeline-note"></p>
         </section>
 
         <section class="map-section" id="map-section">
@@ -479,6 +486,100 @@ function bnpbLevel(text: string): IspuLevel {
     : value.includes('sedang') ? 'sedang'
     : value.includes('baik') ? 'baik' : 'na'
   return ISPU_LEVELS.find((level) => level.key === key) ?? { key: 'na', label: 'Tidak ada data', color: '#9aa69f' }
+}
+
+// ---------- Tren harian ----------
+
+const shortDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+const weekday = new Intl.DateTimeFormat('id-ID', { weekday: 'short', timeZone: 'UTC' })
+const asUtc = (date: string) => new Date(`${date}T00:00:00Z`)
+
+// Interval sumbu-Y bulat (1, 2, 5 × 10^k) agar tick-nya mudah dibaca, dengan 3–5 garis bantu.
+function niceScale(value: number) {
+  const raw = value / 4
+  const base = Math.pow(10, Math.floor(Math.log10(raw)))
+  const step = ([1, 2, 5, 10].map((factor) => factor * base).find((candidate) => candidate >= raw)) ?? 10 * base
+  return { step, max: step * Math.ceil(value / step) }
+}
+
+function renderTimeline(report: TimelineReport) {
+  const days = report.days
+  const complete = days.filter((day) => day.date < report.today)
+  const W = 760
+  const H = 270
+  const pad = { left: 56, right: 12, top: 22, bottom: 42 }
+  const plotW = W - pad.left - pad.right
+  const plotH = H - pad.top - pad.bottom
+  const scale = niceScale(Math.max(1, ...days.map((day) => day.total)))
+  const max = scale.max
+  const slot = plotW / days.length
+  const barW = Math.min(34, slot * 0.66)
+  const y = (value: number) => pad.top + plotH - (value / max) * plotH
+  const ticks = Array.from({ length: Math.round(max / scale.step) + 1 }, (_, index) => index * scale.step)
+
+  const grid = ticks.map((tick) => `<line x1="${pad.left}" x2="${W - pad.right}" y1="${y(tick)}" y2="${y(tick)}" class="tl-grid"/><text x="${pad.left - 6}" y="${y(tick) + 3.5}" text-anchor="end" class="tl-axis">${tick >= 1000 ? `${numberFormat.format(tick / 1000)} rb` : tick}</text>`).join('')
+  const peakDay = complete.reduce<TimelineDay | null>((best, day) => (!best || day.total > best.total ? day : best), null)
+  const bars = days.map((day, index) => {
+    const x = pad.left + slot * index + (slot - barW) / 2
+    const other = day.total - day.peat
+    const partial = day.date >= report.today
+    const date = asUtc(day.date)
+    const label = `${weekday.format(date)}, ${shortDate.format(date)}${partial ? ' (belum lengkap)' : ''}: ${numberFormat.format(day.total)} titik · ${numberFormat.format(day.peat)} di lahan gambut · ${numberFormat.format(day.high)} keyakinan tinggi`
+    return `<g class="tl-bar${partial ? ' partial' : ''}" tabindex="0" role="img" aria-label="${label}"><title>${label}</title>
+      <rect x="${x}" y="${y(day.peat)}" width="${barW}" height="${Math.max(0, plotH - (y(day.peat) - pad.top))}" class="tl-peat"/>
+      <rect x="${x}" y="${y(day.total)}" width="${barW}" height="${Math.max(0, y(day.peat) - y(day.total))}" class="tl-other"/>
+      <rect x="${x - 3}" y="${pad.top}" width="${barW + 6}" height="${plotH}" fill="transparent"/>
+      ${other >= 0 && peakDay?.date === day.date ? `<text x="${x + barW / 2}" y="${y(day.total) - 5}" text-anchor="middle" class="tl-peak">${numberFormat.format(day.total)}</text>` : ''}
+      <text x="${x + barW / 2}" y="${H - 24}" text-anchor="middle" class="tl-axis">${date.getUTCDate()}/${date.getUTCMonth() + 1}</text>
+      <text x="${x + barW / 2}" y="${H - 11}" text-anchor="middle" class="tl-axis dim">${weekday.format(date).slice(0, 3)}</text>
+    </g>`
+  }).join('')
+
+  // Rata-rata bergerak 7 hari, hanya dari hari yang sudah lengkap.
+  const points: string[] = []
+  complete.forEach((_day, index) => {
+    if (index < 6) return
+    const mean = complete.slice(index - 6, index + 1).reduce((sum, item) => sum + item.total, 0) / 7
+    points.push(`${(pad.left + slot * index + slot / 2).toFixed(1)},${y(mean).toFixed(1)}`)
+  })
+  const avgLine = points.length > 1 ? `<polyline points="${points.join(' ')}" class="tl-avg"/>` : ''
+
+  byId('timeline-chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="group" aria-label="Grafik batang jumlah titik panas per hari">${grid}${bars}${avgLine}</svg>`
+
+  // Tren: 7 hari lengkap terakhir dibanding 7 hari sebelumnya.
+  const chip = byId('trend-chip')
+  if (complete.length >= 14) {
+    const last = complete.slice(-7).reduce((sum, day) => sum + day.total, 0) / 7
+    const before = complete.slice(-14, -7).reduce((sum, day) => sum + day.total, 0) / 7
+    const change = before ? ((last - before) / before) * 100 : 0
+    const direction = Math.abs(change) < 3 ? 'flat' : change > 0 ? 'up' : 'down'
+    chip.hidden = false
+    chip.className = `trend-chip ${direction}`
+    chip.textContent = `${direction === 'up' ? '▲ Naik' : direction === 'down' ? '▼ Turun' : '▬ Stabil'}${direction === 'flat' ? '' : ` ${Math.abs(Math.round(change))}%`} dibanding minggu sebelumnya`
+    byId('timeline-note').textContent = `Rata-rata ${numberFormat.format(Math.round(last))} titik per hari dalam 7 hari terakhir (minggu sebelumnya ${numberFormat.format(Math.round(before))}).${peakDay ? ` Puncak ${numberFormat.format(peakDay.total)} titik pada ${shortDate.format(asUtc(peakDay.date))}.` : ''} Hari dihitung menurut WIB; jumlah titik per hari dipengaruhi tutupan awan dan jam lintas satelit, bukan hanya luas api.`
+  } else {
+    chip.hidden = true
+    byId('timeline-note').textContent = 'Jumlah titik per hari dipengaruhi tutupan awan dan jam lintas satelit, bukan hanya luas api.'
+  }
+}
+
+let timelineRetries = 0
+async function loadTimeline() {
+  try {
+    const response = await fetch('/api/timeline')
+    const body = await response.json().catch(() => null)
+    if (response.status === 202 && timelineRetries < 8) {
+      timelineRetries++
+      byId('timeline-chart').innerHTML = '<div class="chart-empty">Menyiapkan tren harian (pertama kali ±1 menit)…</div>'
+      setTimeout(() => void loadTimeline(), 20000)
+      return
+    }
+    if (!response.ok || !body?.days) throw new Error('Tren harian belum tersedia.')
+    timelineRetries = 0
+    renderTimeline(body as TimelineReport)
+  } catch (error) {
+    if (!byId('timeline-chart').querySelector('svg')) byId('timeline-chart').innerHTML = `<div class="chart-empty">${escapeHtml(error instanceof Error ? error.message : 'Tren harian belum tersedia.')}</div>`
+  }
 }
 
 function compareLine(text: string | null) {
@@ -1114,6 +1215,7 @@ setInterval(() => {
   if (document.visibilityState === 'visible') {
     void refreshData()
     void loadBnpb()
+    void loadTimeline()
   }
 }, AUTO_REFRESH_MS)
 
@@ -1130,4 +1232,5 @@ if (shared.length === 2 && shared.every(Number.isFinite) && shared[0] >= -12 && 
   void runCheck(shared[0], shared[1], 'lokasi yang dibagikan')
 }
 void loadBnpb()
+void loadTimeline()
 void loadCctv()

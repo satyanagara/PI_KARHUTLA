@@ -26,6 +26,7 @@ API publik (JSON):
 | `GET /api/laporan-bnpb` | Laporan lapangan BNPB |
 | `GET /api/bmkg?lat=&lon=` | Prakiraan cuaca BMKG untuk desa terdekat (sumber: BMKG) |
 | `GET /api/cctv` | Daftar CCTV kota yang terbuka untuk publik |
+| `GET /api/timeline` | Jumlah titik panas harian 2 minggu terakhir (gabungan 3 satelit VIIRS, hari WIB, dipecah gambut/non-gambut); `202` selagi dibangun pertama kali |
 | `GET /og/cek.png?cek=lat,lon` | Gambar pratinjau 1200×630 status lokasi (dipakai meta Open Graph tautan `/?cek=lat,lon`) |
 
 `source`: `VIIRS_NOAA21_NRT`, `VIIRS_NOAA20_NRT`, `VIIRS_SNPP_NRT`, atau `BRIN_LAPAN`. `days`: `1`, `3`, atau `5`.
