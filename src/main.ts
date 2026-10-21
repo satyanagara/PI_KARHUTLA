@@ -137,10 +137,10 @@ app.innerHTML = `
           <div class="map-frame">
             <div id="fire-map" role="img" aria-label="Peta Indonesia dengan titik panas terdeteksi"></div>
             <div class="map-overline"><span class="map-crosshair">⌖</span> WILAYAH PEMANTAUAN <b>INDONESIA</b></div>
-            <div class="map-layers" aria-label="Lapisan peta"><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-areas" checked /> Kawasan hutan</label><label><input type="checkbox" id="layer-peat" /> Lahan gambut (KHG)</label></div>
+            <div class="map-layers" aria-label="Lapisan peta"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-areas" checked /> Kawasan hutan</label><label><input type="checkbox" id="layer-peat" /> Lahan gambut (KHG)</label></div>
             <div class="map-legend"><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
             <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
-            <div class="map-credit">Peta dasar © Esri, HERE, Garmin · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
+            <div class="map-credit"><span id="basemap-credit"></span> · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
           </div>
         </section>
 
@@ -248,7 +248,39 @@ app.innerHTML = `
 
 const map = L.map('fire-map', { preferCanvas: true, zoomControl: false, attributionControl: false, minZoom: 3, maxZoom: 13 })
 map.fitBounds([[-11, 94], [6, 142]], { padding: [12, 12] })
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(map)
+// Peta dasar yang bisa dipilih pengunjung. Semua tanpa kunci API; atribusi tampil di kredit peta.
+const BASEMAPS = [
+  { key: 'esri-gray', label: 'Abu-abu kalem (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', maxZoom: 16, credit: 'Peta dasar © Esri, HERE, Garmin, kontributor OpenStreetMap' },
+  { key: 'osm', label: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, credit: 'Peta dasar © kontributor OpenStreetMap (ODbL)' },
+  { key: 'esri-satellite', label: 'Citra satelit (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', maxZoom: 18, credit: 'Citra © Esri, Maxar, Earthstar Geographics' },
+] as const
+type BasemapKey = (typeof BASEMAPS)[number]['key']
+let basemapLayer: L.TileLayer | null = null
+
+function readBasemapChoice(): BasemapKey {
+  try {
+    const saved = localStorage.getItem('peta-dasar')
+    if (BASEMAPS.some((item) => item.key === saved)) return saved as BasemapKey
+  } catch {
+    // Penyimpanan lokal bisa tidak tersedia (mode privat); pakai bawaan.
+  }
+  return 'esri-gray'
+}
+
+function setBasemap(key: BasemapKey) {
+  const basemap = BASEMAPS.find((item) => item.key === key) ?? BASEMAPS[0]
+  basemapLayer?.remove()
+  basemapLayer = L.tileLayer(basemap.url, { maxZoom: basemap.maxZoom }).addTo(map)
+  basemapLayer.bringToBack()
+  byId('basemap-credit').textContent = basemap.credit
+  byId<HTMLSelectElement>('basemap-select').value = basemap.key
+  try {
+    localStorage.setItem('peta-dasar', basemap.key)
+  } catch {
+    // Pilihan tetap berlaku untuk sesi ini.
+  }
+}
+
 L.control.zoom({ position: 'bottomright' }).addTo(map)
 L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 120 }).addTo(map)
 map.createPane('areas').style.zIndex = '350'
@@ -1055,6 +1087,9 @@ setInterval(() => {
 }, AUTO_REFRESH_MS)
 
 new ResizeObserver(() => map.invalidateSize()).observe(byId('fire-map'))
+byId<HTMLSelectElement>('basemap-select').innerHTML = BASEMAPS.map((item) => `<option value="${item.key}">${item.label}</option>`).join('')
+byId('basemap-select').addEventListener('change', (event) => setBasemap((event.target as HTMLSelectElement).value as BasemapKey))
+setBasemap(readBasemapChoice())
 syncControls()
 void refreshData()
 // Tautan bagikan membawa ?cek=lat,lon: langsung jalankan cek lokasi untuk titik itu.

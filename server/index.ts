@@ -45,7 +45,7 @@ const SECURITY_HEADERS = {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://server.arcgisonline.com https://i.ytimg.com",
+    "img-src 'self' data: https://server.arcgisonline.com https://tile.openstreetmap.org https://i.ytimg.com",
     "frame-src https://www.youtube-nocookie.com",
     "connect-src 'self'",
     "font-src 'self'",

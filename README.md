@@ -140,6 +140,6 @@ Kode sumber dirilis di bawah [GNU Affero General Public License v3.0](LICENSE) (
 
 ## Atribusi
 
-Hotspot: NASA FIRMS (VIIRS 375 m), BRIN/LAPAN via SiPongi · Prakiraan cuaca: BMKG (Badan Meteorologi, Klimatologi, dan Geofisika) · Laporan lapangan: BNPB · Kawasan hutan, KHG & batas wilayah: Kementerian Kehutanan · Angin & kualitas udara: Open-Meteo (model CAMS, penggunaan non-komersial) · Permukiman: GeoNames · Peta dasar: Esri World Light Gray Canvas.
+Hotspot: NASA FIRMS (VIIRS 375 m), BRIN/LAPAN via SiPongi · Prakiraan cuaca: BMKG (Badan Meteorologi, Klimatologi, dan Geofisika) · Laporan lapangan: BNPB · Kawasan hutan, KHG & batas wilayah: Kementerian Kehutanan · Angin & kualitas udara: Open-Meteo (model CAMS, penggunaan non-komersial) · Permukiman: GeoNames · Peta dasar (pilihan pengunjung): Esri World Light Gray Canvas, OpenStreetMap (© kontributor OpenStreetMap, ODbL), atau citra satelit Esri World Imagery.
 
 Hotspot adalah indikasi anomali termal, bukan konfirmasi kebakaran. Kualitas udara berasal dari model, bukan alat ukur lapangan. Gunakan sebagai peringatan dini, bukan pengganti informasi resmi.
