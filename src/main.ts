@@ -2,7 +2,7 @@ import './style.css'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, ispuLevel, levelRank, type Cluster, type IspuLevel } from './risk.ts'
-import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, trashEquivalent, vulnerableBlock, type ShareCard } from './impact.ts'
+import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, trashEquivalent, vulnerableBlock, whoMultipleText, type ShareCard } from './impact.ts'
 import { levelIcon, levelMeter } from './icons.ts'
 import { FlameLayer } from './flames.ts'
 import { footballFields, prognosis, speciesText, visibilityComparison, wildlifeFor } from './context.ts'
@@ -292,6 +292,7 @@ app.innerHTML = `
             <div><h3>Setara sampah dibakar</h3><p>Skala asap sebuah wilayah api dibandingkan dengan pembakaran sampah rumah tangga: dari kekuatan api satelit (FRP) diperkirakan biomassa yang terbakar (0,368 kg per MJ, Wooster dkk. 2005) dan PM2.5 yang dilepaskan (±9 g/kg vegetasi, Akagi dkk. 2011; ±17 g/kg gambut, Stockwell dkk. 2016), lalu dibagi emisi pembakaran sampah terbuka (±9,8 g/kg, Wiedinmyer dkk. 2014) dan sampah rumah tangga Indonesia (±2,7 kg/hari, SIPSN KLHK). Tiap deteksi dianggap mewakili ±12 jam. Ini gambaran skala dengan ketelitian 2–3 kali lipat, bukan pengukuran, dan tidak tersedia untuk data BRIN/LAPAN yang tanpa FRP.</p></div>
             <div><h3>Lapisan area penting</h3><p>Semua batas area berasal dari SIGAP Kementerian Kehutanan. Moratorium (PIPPIB 2026 periode I) adalah hutan alam primer dan gambut yang tidak boleh diberi izin baru, sehingga api di dalamnya patut dicurigai sebagai pembukaan lahan. Kawasan Ekosistem Esensial mencakup koridor satwa, taman kehati, mangrove, karst, dan lahan basah di luar kawasan konservasi. Hutan adat adalah yang sudah ditetapkan dengan SK. Mangrove dari Peta Mangrove Nasional 2024; kerawanan karhutla dari peta 2025, hanya kelas tinggi dan sangat tinggi. Lapisan besar disederhanakan untuk tampilan (detail ±250–600 m), jadi tepi batasnya tidak presisi.</p></div>
             <div><h3>Satwa, luas, dan prakiraan</h3><p>Satwa unggulan per taman nasional (status kritis/genting menurut IUCN Red List) ditampilkan bila ada api di dalam kawasan itu. Luas terbakar dibandingkan dengan lapangan sepak bola (0,714 ha) dan DKI Jakarta (±661 km²); jarak pandang dengan panjang lapangan (105 m). Prakiraan "kapan membaik" memakai rata-rata PM2.5 model CAMS per 24 jam untuk 4 hari ke depan, sehingga bisa meleset bila cuaca berubah.</p></div>
+            <div><h3>Setara PLTU dan batas WHO</h3><p>Pembanding PLTU memakai batas partikulat PLTU batubara yang beroperasi sebelum 2019, yaitu 100 mg/Nm³ (Permen LHK P.15/2019), dan gas buang PLTU 1.000 MW ±2,8 juta Nm³/jam: paling banyak ±6,7 ton partikulat per hari. Batas itu mencakup semua partikulat, bukan hanya PM2.5, jadi perbandingan ini cenderung meremehkan api. Asap kebakaran tetap lebih berbahaya walau emisinya setara, karena menyebar di ketinggian napas, sedangkan asap PLTU dilepas dari cerobong ratusan meter; PLTU juga sumber polusi, bukan pembanding yang aman. "Kali batas aman WHO" membandingkan rata-rata PM2.5 24 jam dengan pedoman WHO 2021 (15 µg/m³).</p></div>
             <div><h3>Kesehatan & setara rokok</h3><p>Ancaman bagi anak-anak, lansia, dan ibu hamil disarikan dari panduan WHO dan Kementerian Kesehatan tentang asap kebakaran dan PM2.5. Setara rokok memakai perkiraan Berkeley Earth: PM2.5 22 µg/m³ selama sehari ≈ 1 batang rokok. Keduanya untuk memberi gambaran, bukan diagnosis; ikuti arahan tenaga kesehatan setempat.</p></div>
             <div><h3>Istilah</h3><p><b>Titik panas</b>: lokasi yang jauh lebih panas dari sekitarnya menurut satelit, umumnya api. <b>FRP</b>: kekuatan api dalam megawatt. <b>PM2.5</b>: partikel asap halus yang masuk ke paru-paru. <b>ISPU</b>: Indeks Standar Pencemar Udara. <b>KHG</b>: Kesatuan Hidrologis Gambut.</p></div>
             <div><h3>Privasi</h3><p>Situs ini tidak meminta data pribadi. Lokasi perangkat hanya dipakai di peramban Anda dan dikirim ke server sebatas koordinat untuk dihitung, tanpa disimpan. Bila statistik kunjungan diaktifkan (Google Analytics), penghitungan dilakukan tanpa personalisasi iklan dan tidak berjalan bagi pengunjung yang menyalakan Do Not Track.</p></div>
@@ -404,7 +405,7 @@ function clusterSentence(cluster: Cluster) {
     sentence += ` Asap ${smoke.level.label.toLowerCase()} bergerak ke ${compassName(smoke.heading)} ±${Math.round(smoke.reachKm)} km${smoke.towns.length ? `, melewati ${smoke.towns.slice(0, 2).map((town) => escapeHtml(town.name)).join(' dan ')}` : ''}.`
   }
   const trash = report?.frpAvailable ? trashEquivalent(cluster.frp, cluster.peatFires / cluster.count, report.days) : null
-  if (trash && trash.households >= 1000) sentence += ` Asapnya setara membakar sampah harian <b>${trash.text}</b> selama ${report!.days === 1 ? 'sehari' : `${report!.days} hari`}.`
+  if (trash && trash.households >= 1000) sentence += ` Asapnya setara membakar sampah harian <b>${trash.text}</b> selama ${report!.days === 1 ? 'sehari' : `${report!.days} hari`}${trash.pltu ? `, atau setidaknya <b>${trash.pltu.text}</b> yang beroperasi di batas emisi` : ''}.`
   return sentence
 }
 
@@ -447,7 +448,7 @@ function renderStatus(data: Report) {
     if (unhealthy.length) points.push(`<b>${unhealthy.length}</b> kota/kecamatan diperkirakan dilalui asap tidak sehat, antara lain ${unhealthy.slice(0, 4).map((town) => `<b>${escapeHtml(town.name)}</b>`).join(', ')}.`)
     if (summary.stationary) points.push(`<b>${numberFormat.format(summary.stationary)}</b> titik lain tidak dihitung karena terdeteksi berulang di tempat yang sama, kemungkinan pabrik, pembangkit, atau pembakaran berulang.`)
     const trash = data.frpAvailable && summary.total ? trashEquivalent(summary.frp, summary.peat.inside / summary.total, data.days) : null
-    if (trash) points.push(`Semua api itu melepaskan <b>±${numberFormat.format(Math.round(trash.pm25Tonnes))} ton</b> asap halus (PM2.5), setara membakar sampah harian <b>${trash.text}</b> setiap hari selama ${period} <small>(perkiraan kasar dari kekuatan api satelit)</small>.`)
+    if (trash) points.push(`Semua api itu melepaskan <b>±${numberFormat.format(Math.round(trash.pm25Tonnes))} ton</b> asap halus (PM2.5), setara membakar sampah harian <b>${trash.text}</b> setiap hari selama ${period}${trash.pltu ? `, atau setidaknya <b>${trash.pltu.text}</b> yang beroperasi sehari penuh di batas emisi` : ''} <small>(perkiraan kasar dari kekuatan api satelit)</small>.`)
     const wild = data.areaRanking.filter((area) => area.inside > 0 && wildlifeFor(area.name).length).slice(0, 3)
     if (wild.length) points.push(`Api sedang berkobar di <b>habitat satwa terancam punah</b>: ${wild.map((area) => `<b>${escapeHtml(area.name)}</b> (${wildlifeFor(area.name).slice(0, 2).map(speciesText).join(', ')})`).join('; ')}.`)
     const forest = summary.konservasi.inside + summary.lindung.inside
@@ -461,7 +462,7 @@ function renderStatus(data: Report) {
   impact.hidden = !worstTown || !UNHEALTHY_LEVELS.includes(worstTown.level.key)
   if (worstTown && !impact.hidden) {
     const streak = streakText(worstTown.unhealthyDays)
-    impact.innerHTML = `Hari ini, menghirup udara di <b>${escapeHtml(worstTown.name)}</b> seharian setara mengisap <b class="impact-number">${cigaretteText(worstTown.pm25)}</b>, termasuk bagi bayi dan anak-anak${streak ? `, dan ini sudah <b>${streak}</b>` : ''}.<span class="impact-vulnerable">${VULNERABLE_SHORT}</span><small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small>`
+    impact.innerHTML = `Hari ini, menghirup udara di <b>${escapeHtml(worstTown.name)}</b> seharian setara mengisap <b class="impact-number">${cigaretteText(worstTown.pm25)}</b>, termasuk bagi bayi dan anak-anak${streak ? `, dan ini sudah <b>${streak}</b>` : ''}.${whoMultipleText(worstTown.pm25) ? ` Kadar asap halusnya <b>${whoMultipleText(worstTown.pm25)}</b>.` : ''}<span class="impact-vulnerable">${VULNERABLE_SHORT}</span><small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small>`
     statusCard = { level: worstTown.level, place: `${worstTown.name}, ${worstTown.province}`, pm25: worstTown.pm25, streakDays: worstTown.unhealthyDays, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · ' + wibFormat.format(new Date(data.fetchedAt)) + ' WIB' }
     byId('status-share').innerHTML = shareMenu('status', statusCard, `https://${location.host}/?cek=${worstTown.lat.toFixed(4)},${worstTown.lon.toFixed(4)}`)
   }
@@ -1101,7 +1102,7 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
     <div class="check-summary" style="--level:${result.level.color}">
       <div class="check-head">${levelIcon(result.level.key, 52)}<div><small>Udara yang Anda hirup hari ini di</small><strong>${escapeHtml(place)}</strong><span class="ispu-badge ${result.level.key}" style="--level:${result.level.color}">${result.level.label}</span></div></div>
       ${levelMeter(result.level.key)}
-      ${cigarettes ? `<p class="impact-line">Menghirup udara ini seharian setara mengisap <b class="impact-number">${cigarettes}</b>, termasuk bagi bayi dan anak-anak${streak && UNHEALTHY_LEVELS.includes(result.level.key) ? `. Udara tidak sehat <b>${streak}</b>` : ''}.${levelRank(result.level.key) >= levelRank('sangat-tidak-sehat') ? ' Rasanya seperti berdiri seharian di dalam asap pembakaran sampah.' : ''}<small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small></p>` : ''}
+      ${cigarettes ? `<p class="impact-line">Menghirup udara ini seharian setara mengisap <b class="impact-number">${cigarettes}</b>, termasuk bagi bayi dan anak-anak${streak && UNHEALTHY_LEVELS.includes(result.level.key) ? `. Udara tidak sehat <b>${streak}</b>` : ''}.${levelRank(result.level.key) >= levelRank('sangat-tidak-sehat') ? ' Rasanya seperti berdiri seharian di dalam asap pembakaran sampah.' : ''}${whoMultipleText(pm25) ? ` Kadar asap halusnya <b>${whoMultipleText(pm25)}</b>.` : ''}<small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth); batas aman WHO 15 µg/m³ rata-rata 24 jam.</small></p>` : ''}
       ${prognosisBlock(result)}
       ${vulnerableBlock(result.level)}
       ${checklist(result.level, 'langkah-cek')}

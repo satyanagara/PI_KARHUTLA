@@ -89,6 +89,13 @@ const EF_PEAT = 0.017
 const EF_TRASH = 0.0098
 const TRASH_PER_HOUSEHOLD_DAY = 2.7
 const HOUSEHOLDS_INDONESIA = 70_000_000
+// Pembanding PLTU: batas partikulat PLTU batubara yang beroperasi sebelum 2019 adalah 100 mg/Nm³ (Permen LHK
+// P.15/2019, Lampiran I), dengan gas buang PLTU 1.000 MW ±2,8 juta Nm³/jam. Jadi satu PLTU besar yang beroperasi tepat
+// di batas boleh membuang paling banyak ±6,7 ton partikulat per hari. Batas itu untuk partikulat total, bukan hanya
+// PM2.5, sehingga perbandingan dengan PM2.5 kebakaran ini cenderung meremehkan api, bukan melebih-lebihkan.
+const PLTU_PM_KG_PER_DAY = 2_800_000 * 100e-6 * 24
+// Pedoman kualitas udara WHO 2021: rata-rata PM2.5 24 jam sebaiknya tidak melebihi 15 µg/m³.
+export const WHO_PM25_24H = 15
 
 export function smokeEmissionKg(frpMw: number, peatFraction: number) {
   const biomassKg = BIOMASS_PER_MJ * frpMw * SECONDS_PER_DETECTION
@@ -110,7 +117,21 @@ export function formatHouseholds(households: number) {
 export function trashEquivalent(frpMw: number, peatFraction: number, days: number) {
   if (!frpMw) return null
   const pm25Kg = smokeEmissionKg(frpMw, peatFraction)
-  return { pm25Tonnes: pm25Kg / 1000, households: trashHouseholds(pm25Kg, days), text: formatHouseholds(trashHouseholds(pm25Kg, days)) }
+  return { pm25Tonnes: pm25Kg / 1000, households: trashHouseholds(pm25Kg, days), text: formatHouseholds(trashHouseholds(pm25Kg, days)), pltu: pltuEquivalent(pm25Kg, days) }
+}
+
+// Jumlah PLTU batubara 1.000 MW yang beroperasi di batas emisi untuk menyamai PM2.5 api per hari.
+export function pltuEquivalent(pm25Kg: number, days: number) {
+  const plants = pm25Kg / Math.max(1, days) / PLTU_PM_KG_PER_DAY
+  if (plants < 0.5) return null
+  return { plants, text: plants >= 10 ? `±${Math.round(plants).toLocaleString('id-ID')} PLTU batubara besar` : `±${plants.toFixed(1).replace('.', ',')} PLTU batubara besar` }
+}
+
+export function whoMultipleText(pm25: number | null) {
+  if (pm25 === null || !Number.isFinite(pm25)) return null
+  const ratio = pm25 / WHO_PM25_24H
+  if (ratio < 1) return null
+  return `${ratio < 10 ? ratio.toFixed(1).replace('.', ',').replace(',0', '') : Math.round(ratio).toLocaleString('id-ID')} kali batas aman WHO`
 }
 
 export function cigaretteText(pm25: number | null) {
