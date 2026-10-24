@@ -2439,6 +2439,10 @@ tbody tr:hover td {
   backdrop-filter: blur(6px);
   font-size: 12px;
   color: var(--ink-soft);
+  /* Tetap di dalam bingkai peta (overflow: hidden) saat "Area penting lainnya" dibuka; sisakan ruang untuk keterangan sumber. */
+  max-height: calc(100% - 56px - 52px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .map-layers label {
@@ -3182,6 +3186,7 @@ tbody tr:hover td {
   .map-layers {
     top: 12px;
     left: 12px;
+    max-height: calc(100% - 24px);
   }
 
   .map-credit {

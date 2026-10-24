@@ -1208,6 +1208,12 @@ for (const kind of ['konservasi', 'lindung'] as const) {
     else layer.remove()
   })
 }
+// Di layar pendek panel lapisan bisa digulir; saat grup dibuka, gulir agar semua lapisannya langsung terlihat.
+document.querySelector<HTMLDetailsElement>('.layer-more')?.addEventListener('toggle', (event) => {
+  const details = event.currentTarget as HTMLDetailsElement
+  const panel = details.closest<HTMLElement>('.map-layers')
+  if (details.open && panel) panel.scrollTo({ top: panel.scrollHeight, behavior: 'smooth' })
+})
 document.querySelectorAll<HTMLInputElement>('[data-overlay]').forEach((input) => input.addEventListener('change', () => {
   const id = input.dataset.overlay!
   if (input.checked) {
