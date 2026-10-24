@@ -1985,6 +1985,22 @@ h2 {
   border: 1.5px solid;
 }
 
+.legend-flame {
+  display: inline-block;
+  width: 9px;
+  height: 13px;
+  border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%;
+  background: linear-gradient(to top, #c2321b, #f0612a 45%, #ffd36a);
+  transform: translateY(-1px);
+}
+
+.flame-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
 .legend-fire.strong {
   border-color: var(--fire);
   background: rgb(223 89 60 / 0.68);

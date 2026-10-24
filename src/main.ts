@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compassLabel, compassName, ispuLevel, levelRank, type Cluster, type IspuLevel } from './risk.ts'
 import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, trashEquivalent, vulnerableBlock, type ShareCard } from './impact.ts'
 import { levelIcon, levelMeter } from './icons.ts'
+import { FlameLayer } from './flames.ts'
 import { footballFields, prognosis, speciesText, visibilityComparison, wildlifeFor } from './context.ts'
 import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type TimelineDay, type TimelineReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
@@ -146,7 +147,7 @@ app.innerHTML = `
             <div id="fire-map" role="img" aria-label="Peta Indonesia dengan titik panas terdeteksi"></div>
             <div class="map-overline"><span class="map-crosshair">⌖</span> WILAYAH PEMANTAUAN <b>INDONESIA</b></div>
             <div class="map-layers" aria-label="Lapisan peta"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-areas" checked /> Kawasan hutan</label><label><input type="checkbox" id="layer-peat" /> Lahan gambut (KHG)</label></div>
-            <div class="map-legend"><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
+            <div class="map-legend"><span title="Titik keyakinan tinggi yang bukan sumber panas tetap; dianimasikan sebagai nyala api"><i class="legend-flame"></i> Diyakini kebakaran</span><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
             <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
             <div class="map-credit"><span id="basemap-credit"></span> · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
           </div>
@@ -298,6 +299,7 @@ map.createPane('areas').style.zIndex = '350'
 map.createPane('smoke').style.zIndex = '380'
 
 const fireLayer = L.layerGroup().addTo(map)
+const flameLayer = new FlameLayer().addTo(map)
 const smokeLayer = L.layerGroup().addTo(map)
 let areaLayer: L.GeoJSON | null = null
 let areaLoad: Promise<void> | null = null
@@ -727,6 +729,8 @@ function renderMap(fires: ReportFire[]) {
   const drawOrder: Record<Confidence, number> = { low: 0, medium: 1, high: 2 }
   const colors: Record<Confidence, string> = { high: '#df593c', medium: '#df9b35', low: '#5e9d78' }
   const ordered = fires.map((fire) => ({ fire, confidence: confidenceOf(fire[4]) })).sort((a, b) => drawOrder[a.confidence] - drawOrder[b.confidence])
+  // Nyala api beranimasi hanya untuk titik yang diyakini kebakaran: keyakinan tinggi dan bukan sumber panas tetap.
+  flameLayer.setFires(ordered.filter(({ fire, confidence }) => confidence === 'high' && fire[13] !== FLAG_STATIONARY).map(({ fire }) => ({ lat: fire[0], lon: fire[1], frp: fire[5] })))
   for (const { fire, confidence } of ordered) {
     if (fire[13] === FLAG_STATIONARY) {
       L.circleMarker([fire[0], fire[1]], { radius: 3.5, color: '#6b7280', weight: 1.5, opacity: 0.9, fillColor: '#ffffff', fillOpacity: 0.9 })
