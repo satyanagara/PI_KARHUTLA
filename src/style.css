@@ -2453,6 +2453,42 @@ tbody tr:hover td {
   accent-color: var(--ink);
 }
 
+.layer-swatch {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid;
+  border-radius: 3px;
+}
+
+.layer-swatch.konservasi { border-color: #1f6b45; background: rgb(63 154 108 / 0.35); }
+.layer-swatch.lindung { border-color: #5f8f4f; background: rgb(168 207 138 / 0.4); }
+.layer-swatch.gambut { border-color: #8a5a2b; background: rgb(176 122 67 / 0.35); }
+.layer-swatch.pippib { border-color: #5b3f8c; border-style: dashed; background: rgb(91 63 140 / 0.22); }
+.layer-swatch.kee { border-color: #1f7a9c; background: rgb(63 163 200 / 0.35); }
+.layer-swatch.adat { border-color: #a0521d; border-style: dashed; background: rgb(217 138 74 / 0.3); }
+.layer-swatch.mangrove { border-color: #0e7c66; background: rgb(22 160 133 / 0.45); }
+.layer-swatch.rawan { border-color: #b03a2e; background: linear-gradient(135deg, rgb(232 145 58 / 0.4) 50%, rgb(192 57 43 / 0.45) 50%); }
+
+.layer-more {
+  border-top: 1px solid rgb(22 37 29 / 0.08);
+  padding-top: 6px;
+}
+
+.layer-more summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.layer-more[open] summary {
+  margin-bottom: 6px;
+}
+
+.layer-more label + label {
+  margin-top: 6px;
+}
+
 .basemap-pick {
   flex-direction: column;
   align-items: stretch !important;

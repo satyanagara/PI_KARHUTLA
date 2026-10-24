@@ -367,6 +367,9 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) return sendError(res, 404, 'Endpoint tidak ditemukan.')
     if (url.pathname === '/data/kawasan-hutan.json') return serveFile(req, res, path.join(DATA, 'kawasan-hutan-web.json'), 'public, max-age=86400')
     if (url.pathname === '/data/gambut.json') return serveFile(req, res, path.join(DATA, 'gambut-web.json'), 'public, max-age=86400')
+    // Lapisan area penting lainnya (SIGAP), dimuat browser hanya saat kotaknya dicentang.
+    const overlay = /^\/data\/lapisan\/(kee|adat|pippib|mangrove|rawan)\.json$/.exec(url.pathname)
+    if (overlay) return serveFile(req, res, path.join(DATA, `lapisan-${overlay[1]}.json`), 'public, max-age=86400')
     return serveStatic(req, res, url)
   } catch (error) {
     console.error('[server]', error)

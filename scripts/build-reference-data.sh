@@ -3,11 +3,13 @@
 #   settlements.txt                      permukiman Indonesia dari GeoNames (CC BY 4.0)
 #   kawasan-hutan.json / -web.json       kawasan konservasi & hutan lindung, IGT Kawasan Hutan 1:250.000
 #   gambut.json / gambut-web.json        Kesatuan Hidrologis Gambut (KHG) 1:250.000
+#   lapisan-*.json                       lapisan peta area penting (hanya tampilan): moratorium PIPPIB 2026, Kawasan
+#                                        Ekosistem Esensial, hutan adat, mangrove 2024, rawan karhutla 2025 (kelas tinggi)
 #   provinsi.json / kabupaten.json       batas wilayah (SiPongi, Kementerian Kehutanan); provinsi = penyaring wilayah RI
 #   desa.txt                             kode desa Kemendagri + titik tengah (cahyadsn/wilayah_boundaries, MIT) untuk API BMKG
 #   wilayah.txt                          nama provinsi/kabupaten/kecamatan menurut kode Kemendagri (cahyadsn/wilayah, MIT)
-# Kawasan hutan dan KHG bersumber dari SIGAP Kementerian Kehutanan (Ditjen Planologi Kehutanan).
-# Butuh: curl, unzip, python3, npx (mapshaper diunduh otomatis). Unduhan SIGAP ±860 MB.
+# Kawasan hutan, KHG, dan lapisan area penting bersumber dari SIGAP Kementerian Kehutanan.
+# Butuh: curl, unzip, python3, npx (mapshaper diunduh otomatis). Unduhan SIGAP ±5,7 GB (lapisan area penting ±4,8 GB).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -46,6 +48,21 @@ python3 -I "$ROOT/scripts/normalize_klhk.py" gambut "$WORK/gambut.geojson" "$WOR
   NODE_OPTIONS=--max-old-space-size=8192 $MAPSHAPER kawasan-norm.geojson -simplify interval=400 keep-shapes -filter-slivers min-area=0.05km2 -o kawasan-web.json format=geojson precision=0.001 && \
   $MAPSHAPER gambut-norm.geojson -dissolve2 c copy-fields=n,k -simplify interval=120 keep-shapes -clean -o gambut-server.json format=geojson precision=0.0001 && \
   $MAPSHAPER gambut-norm.geojson -dissolve2 c copy-fields=n,k -simplify interval=600 keep-shapes -clean -o gambut-web.json format=geojson precision=0.001)
+
+# Lapisan area penting: KML dibaca streaming (berkas sumber sampai ±2,3 GB) lalu digabung per kelas dan disederhanakan.
+for spec in "kee kee_ar_50k" "adat hutan_adat_50k_092025" "pippib pippib_2026_i_250k" "mangrove mangrove_ar_25k_24" "rawan rawan_karhutla_ar_250k_2025"; do
+  set -- $spec
+  echo "Mengunduh lapisan $2 dari SIGAP..."
+  curl -sSf --max-time 2400 -A "$UA" -o "$WORK/$1.kml" "$WMS?$BASE&layers=sigap:$2"
+  python3 -I "$ROOT/scripts/kml_layer.py" "$1" "$WORK/$1.kml" "$WORK/$1.geojson"
+  rm -f "$WORK/$1.kml"
+done
+(cd "$WORK" && export NODE_OPTIONS=--max-old-space-size=10000 && \
+  $MAPSHAPER kee.geojson -simplify interval=60 keep-shapes -o "$OUT/lapisan-kee.json" format=geojson precision=0.0001 && \
+  $MAPSHAPER adat.geojson -simplify interval=60 keep-shapes -o "$OUT/lapisan-adat.json" format=geojson precision=0.0001 && \
+  $MAPSHAPER pippib.geojson -simplify interval=500 -dissolve2 c -filter-slivers min-area=0.2km2 -clean -o "$OUT/lapisan-pippib.json" format=geojson precision=0.001 && \
+  $MAPSHAPER rawan.geojson -simplify interval=600 -dissolve2 c -filter-slivers min-area=0.2km2 -clean -o "$OUT/lapisan-rawan.json" format=geojson precision=0.001 && \
+  $MAPSHAPER mangrove.geojson -simplify interval=250 -dissolve2 c -filter-slivers min-area=0.2km2 -clean -o "$OUT/lapisan-mangrove.json" format=geojson precision=0.001)
 
 echo "Mengunduh batas provinsi dan kabupaten/kota dari SiPongi..."
 for LEVEL in provinsi kabupaten; do

@@ -16,6 +16,53 @@ const sourceNames: Record<Source, string> = {
   BRIN_LAPAN: 'BRIN/LAPAN · SiPongi (resmi)',
 }
 const AREA_SOURCE = 'Kementerian Kehutanan (SIGAP)'
+
+// Area penting lainnya dari SIGAP Kementerian Kehutanan; masing-masing dimuat hanya saat dicentang.
+type Overlay = { id: string; label: string; hint: string; style: (feature?: GeoJSON.Feature) => L.PathOptions; tooltip: (properties: Record<string, string>) => string }
+const PIPPIB_LABEL: Record<string, string> = { primer: 'hutan alam primer', gambut: 'lahan gambut', kawasan: 'kawasan hutan konservasi/lindung' }
+const OVERLAYS: Overlay[] = [
+  {
+    id: 'pippib',
+    label: 'Moratorium hutan primer & gambut',
+    hint: 'Peta Indikatif Penghentian Pemberian Izin Baru (PIPPIB) 2026: hutan alam primer dan gambut yang tidak boleh diberi izin baru',
+    style: (feature) => {
+      const color = { primer: '#5b3f8c', gambut: '#7a4f2a', kawasan: '#4a5f8c' }[feature?.properties?.c as string] ?? '#5b3f8c'
+      return { color, weight: 0.6, opacity: 0.7, fillColor: color, fillOpacity: 0.14, dashArray: '3 3' }
+    },
+    tooltip: (properties) => `Moratorium izin baru: ${escapeHtml(PIPPIB_LABEL[properties.c] ?? properties.c)}<br><small>PIPPIB 2026 periode I</small>`,
+  },
+  {
+    id: 'kee',
+    label: 'Kawasan Ekosistem Esensial',
+    hint: 'Kawasan bernilai penting di luar kawasan konservasi: koridor satwa, taman kehati, mangrove, karst, lahan basah',
+    style: () => ({ color: '#1f7a9c', weight: 1.2, opacity: 0.85, fillColor: '#3fa3c8', fillOpacity: 0.22 }),
+    tooltip: (properties) => `${escapeHtml(properties.n)}<br><small>Kawasan Ekosistem Esensial${properties.t ? ` · ${escapeHtml(properties.t)}` : ''}</small>`,
+  },
+  {
+    id: 'adat',
+    label: 'Hutan adat',
+    hint: 'Hutan adat yang sudah ditetapkan Kementerian Kehutanan',
+    style: () => ({ color: '#a0521d', weight: 1.4, opacity: 0.9, fillColor: '#d98a4a', fillOpacity: 0.2, dashArray: '5 3' }),
+    tooltip: (properties) => `${escapeHtml(properties.n)}<br><small>Hutan adat${properties.s ? ` · ${escapeHtml(properties.s)}` : ''}</small>`,
+  },
+  {
+    id: 'mangrove',
+    label: 'Mangrove',
+    hint: 'Peta Mangrove Nasional 2024 (citra PlanetScope dan Sentinel-2)',
+    style: (feature) => ({ color: '#0e7c66', weight: 0.5, opacity: 0.8, fillColor: '#16a085', fillOpacity: { lebat: 0.45, sedang: 0.32, jarang: 0.2 }[feature?.properties?.c as string] ?? 0.3 }),
+    tooltip: (properties) => `Mangrove ${escapeHtml(properties.c)}<br><small>Peta Mangrove Nasional 2024</small>`,
+  },
+  {
+    id: 'rawan',
+    label: 'Rawan karhutla (tinggi)',
+    hint: 'Peta kerawanan kebakaran hutan dan lahan 2025, hanya kelas tinggi dan sangat tinggi',
+    style: (feature) => {
+      const severe = feature?.properties?.c === 'sangat-tinggi'
+      return { color: severe ? '#b03a2e' : '#d9822b', weight: 0.4, opacity: 0.6, fillColor: severe ? '#c0392b' : '#e8913a', fillOpacity: severe ? 0.24 : 0.16 }
+    },
+    tooltip: (properties) => `Rawan karhutla: ${properties.c === 'sangat-tinggi' ? 'sangat tinggi' : 'tinggi'}<br><small>Peta kerawanan karhutla 2025</small>`,
+  },
+]
 const AUTO_REFRESH_MS = 10 * 60 * 1000
 
 // Pilihan sumber & periode dibaca dari URL agar tautan bisa dibagikan.
@@ -146,10 +193,10 @@ app.innerHTML = `
           <div class="map-frame">
             <div id="fire-map" role="img" aria-label="Peta Indonesia dengan titik panas terdeteksi"></div>
             <div class="map-overline"><span class="map-crosshair">⌖</span> WILAYAH PEMANTAUAN <b>INDONESIA</b></div>
-            <div class="map-layers" aria-label="Lapisan peta"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-areas" checked /> Kawasan hutan</label><label><input type="checkbox" id="layer-peat" /> Lahan gambut (KHG)</label></div>
+            <div class="map-layers" aria-label="Lapisan peta"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-konservasi" checked /><i class="layer-swatch konservasi"></i> Kawasan konservasi</label><label><input type="checkbox" id="layer-lindung" checked /><i class="layer-swatch lindung"></i> Hutan lindung</label><label><input type="checkbox" id="layer-peat" /><i class="layer-swatch gambut"></i> Lahan gambut (KHG)</label><details class="layer-more"><summary>Area penting lainnya</summary>${OVERLAYS.map((overlay) => `<label title="${escapeHtml(overlay.hint)}"><input type="checkbox" id="layer-${overlay.id}" data-overlay="${overlay.id}" /><i class="layer-swatch ${overlay.id}"></i> ${escapeHtml(overlay.label)}</label>`).join('')}</details></div>
             <div class="map-legend"><span title="Titik keyakinan tinggi yang bukan sumber panas tetap; dianimasikan sebagai nyala api"><i class="legend-flame"></i> Diyakini kebakaran</span><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
             <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
-            <div class="map-credit"><span id="basemap-credit"></span> · Kawasan hutan &amp; KHG © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
+            <div class="map-credit"><span id="basemap-credit"></span> · Kawasan hutan, KHG, PIPPIB, KEE, hutan adat, mangrove &amp; kerawanan karhutla © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
           </div>
         </section>
 
@@ -243,6 +290,7 @@ app.innerHTML = `
             <div><h3>Asap &amp; ISPU</h3><p>Titik dikelompokkan per ±20 km. Untuk 30 kluster teratas, angin dan PM2.5 diambil dari <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (model CAMS). Kategori mengikuti ISPU PM2.5 rata-rata 24 jam (PermenLHK P.14/2020). Jalur asap adalah kerucut 6 jam searah angin.</p></div>
             <div><h3>Sumber panas tetap</h3><p>Titik yang terdeteksi pada ≥3 hari berbeda dalam 5 hari terakhir di tempat yang sama (±440 m) dan dekat permukiman ditandai abu-abu sebagai kemungkinan pabrik, pembangkit, atau pembakaran berulang, lalu tidak dihitung dalam analisis risiko. Titik tetap tampil di peta dan CSV. Titik di lahan gambut atau kawasan hutan tidak pernah ditandai.</p></div>
             <div><h3>Setara sampah dibakar</h3><p>Skala asap sebuah wilayah api dibandingkan dengan pembakaran sampah rumah tangga: dari kekuatan api satelit (FRP) diperkirakan biomassa yang terbakar (0,368 kg per MJ, Wooster dkk. 2005) dan PM2.5 yang dilepaskan (±9 g/kg vegetasi, Akagi dkk. 2011; ±17 g/kg gambut, Stockwell dkk. 2016), lalu dibagi emisi pembakaran sampah terbuka (±9,8 g/kg, Wiedinmyer dkk. 2014) dan sampah rumah tangga Indonesia (±2,7 kg/hari, SIPSN KLHK). Tiap deteksi dianggap mewakili ±12 jam. Ini gambaran skala dengan ketelitian 2–3 kali lipat, bukan pengukuran, dan tidak tersedia untuk data BRIN/LAPAN yang tanpa FRP.</p></div>
+            <div><h3>Lapisan area penting</h3><p>Semua batas area berasal dari SIGAP Kementerian Kehutanan. Moratorium (PIPPIB 2026 periode I) adalah hutan alam primer dan gambut yang tidak boleh diberi izin baru, sehingga api di dalamnya patut dicurigai sebagai pembukaan lahan. Kawasan Ekosistem Esensial mencakup koridor satwa, taman kehati, mangrove, karst, dan lahan basah di luar kawasan konservasi. Hutan adat adalah yang sudah ditetapkan dengan SK. Mangrove dari Peta Mangrove Nasional 2024; kerawanan karhutla dari peta 2025, hanya kelas tinggi dan sangat tinggi. Lapisan besar disederhanakan untuk tampilan (detail ±250–600 m), jadi tepi batasnya tidak presisi.</p></div>
             <div><h3>Satwa, luas, dan prakiraan</h3><p>Satwa unggulan per taman nasional (status kritis/genting menurut IUCN Red List) ditampilkan bila ada api di dalam kawasan itu. Luas terbakar dibandingkan dengan lapangan sepak bola (0,714 ha) dan DKI Jakarta (±661 km²); jarak pandang dengan panjang lapangan (105 m). Prakiraan "kapan membaik" memakai rata-rata PM2.5 model CAMS per 24 jam untuk 4 hari ke depan, sehingga bisa meleset bila cuaca berubah.</p></div>
             <div><h3>Kesehatan & setara rokok</h3><p>Ancaman bagi anak-anak, lansia, dan ibu hamil disarikan dari panduan WHO dan Kementerian Kesehatan tentang asap kebakaran dan PM2.5. Setara rokok memakai perkiraan Berkeley Earth: PM2.5 22 µg/m³ selama sehari ≈ 1 batang rokok. Keduanya untuk memberi gambaran, bukan diagnosis; ikuti arahan tenaga kesehatan setempat.</p></div>
             <div><h3>Istilah</h3><p><b>Titik panas</b>: lokasi yang jauh lebih panas dari sekitarnya menurut satelit, umumnya api. <b>FRP</b>: kekuatan api dalam megawatt. <b>PM2.5</b>: partikel asap halus yang masuk ke paru-paru. <b>ISPU</b>: Indeks Standar Pencemar Udara. <b>KHG</b>: Kesatuan Hidrologis Gambut.</p></div>
@@ -301,8 +349,10 @@ map.createPane('smoke').style.zIndex = '380'
 const fireLayer = L.layerGroup().addTo(map)
 const flameLayer = new FlameLayer().addTo(map)
 const smokeLayer = L.layerGroup().addTo(map)
-let areaLayer: L.GeoJSON | null = null
+const areaLayers: Partial<Record<'konservasi' | 'lindung', L.GeoJSON>> = {}
 let areaLoad: Promise<void> | null = null
+const overlayLayers: Record<string, L.GeoJSON> = {}
+const overlayLoads: Record<string, Promise<void>> = {}
 let peatLayer: L.GeoJSON | null = null
 let peatLoad: Promise<void> | null = null
 
@@ -855,23 +905,45 @@ function geojsonLayer(url: string, style: (feature?: GeoJSON.Feature) => L.PathO
 }
 
 function loadAreas() {
-  areaLoad ??= geojsonLayer(
-    '/data/kawasan-hutan.json',
-    (feature) => {
-      const lindung = feature?.properties?.k === 'lindung'
-      return { color: lindung ? '#4f7f5f' : '#2f6b49', weight: 0.7, opacity: 0.7, fillColor: lindung ? '#8fbf8f' : '#4f9a6c', fillOpacity: 0.16 }
-    },
-    (properties) => `${escapeHtml(properties.n)}<br><small>${escapeHtml(properties.t)}</small>`,
-  )
-    .then((layer) => {
-      areaLayer = layer
-      if (byId<HTMLInputElement>('layer-areas').checked) layer.addTo(map)
+  // Satu berkas kawasan hutan dipecah menjadi dua lapisan agar konservasi dan hutan lindung bisa dinyalakan terpisah.
+  areaLoad ??= fetch('/data/kawasan-hutan.json')
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      return response.json() as Promise<GeoJSON.FeatureCollection>
+    })
+    .then((geojson) => {
+      for (const kind of ['konservasi', 'lindung'] as const) {
+        const lindung = kind === 'lindung'
+        const layer = L.geoJSON(geojson, {
+          pane: 'areas',
+          filter: (feature) => (feature.properties?.k === 'lindung') === lindung,
+          style: { color: lindung ? '#5f8f4f' : '#1f6b45', weight: lindung ? 0.6 : 0.9, opacity: 0.75, fillColor: lindung ? '#a8cf8a' : '#3f9a6c', fillOpacity: lindung ? 0.14 : 0.2 },
+          onEachFeature: (feature, item) => item.bindTooltip(`${escapeHtml(feature.properties?.n)}<br><small>${escapeHtml(feature.properties?.t)}</small>`, { sticky: true }),
+        })
+        areaLayers[kind] = layer
+        if (byId<HTMLInputElement>(`layer-${kind}`).checked) layer.addTo(map)
+      }
     })
     .catch((error) => {
       areaLoad = null
       console.warn('Batas kawasan gagal dimuat:', error)
     })
   return areaLoad
+}
+
+function loadOverlay(id: string) {
+  const overlay = OVERLAYS.find((item) => item.id === id)
+  if (!overlay) return Promise.resolve()
+  overlayLoads[id] ??= geojsonLayer(`/data/lapisan/${id}.json`, overlay.style, overlay.tooltip)
+    .then((layer) => {
+      overlayLayers[id] = layer
+      if (byId<HTMLInputElement>(`layer-${id}`).checked) layer.addTo(map)
+    })
+    .catch((error) => {
+      delete overlayLoads[id]
+      console.warn(`Lapisan ${overlay.label} gagal dimuat:`, error)
+    })
+  return overlayLoads[id]
 }
 
 function loadPeat() {
@@ -1128,11 +1200,21 @@ byId<HTMLInputElement>('layer-smoke').addEventListener('change', (event) => {
   if ((event.target as HTMLInputElement).checked) smokeLayer.addTo(map)
   else smokeLayer.remove()
 })
-byId<HTMLInputElement>('layer-areas').addEventListener('change', (event) => {
-  if (!areaLayer) return
-  if ((event.target as HTMLInputElement).checked) areaLayer.addTo(map)
-  else areaLayer.remove()
-})
+for (const kind of ['konservasi', 'lindung'] as const) {
+  byId<HTMLInputElement>(`layer-${kind}`).addEventListener('change', (event) => {
+    const layer = areaLayers[kind]
+    if (!layer) return
+    if ((event.target as HTMLInputElement).checked) layer.addTo(map)
+    else layer.remove()
+  })
+}
+document.querySelectorAll<HTMLInputElement>('[data-overlay]').forEach((input) => input.addEventListener('change', () => {
+  const id = input.dataset.overlay!
+  if (input.checked) {
+    if (overlayLayers[id]) overlayLayers[id].addTo(map)
+    else void loadOverlay(id)
+  } else overlayLayers[id]?.remove()
+}))
 byId<HTMLInputElement>('layer-peat').addEventListener('change', (event) => {
   if ((event.target as HTMLInputElement).checked) {
     if (peatLayer) peatLayer.addTo(map)
