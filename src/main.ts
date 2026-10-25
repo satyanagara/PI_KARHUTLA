@@ -145,12 +145,24 @@ app.innerHTML = `
           </article>
         </section>
 
-        <section class="bnpb-section" id="laporan-bnpb">
+        <section class="map-section" id="map-section">
           <div class="section-head">
-            <div><div class="section-kicker">LAPORAN RESMI SATGAS KARHUTLA · BNPB</div><h2>Kondisi lapangan di provinsi prioritas</h2></div>
-            <span class="risk-state" id="bnpb-state">Memuat laporan BNPB…</span>
+            <div><div class="section-kicker">SEBARAN GEOGRAFIS</div><h2>Peta hotspot aktif</h2></div>
+            <div class="map-controls">
+              <label class="select-wrap"><span class="sr-only">Sumber satelit</span><select id="source-select" aria-label="Pilih sumber satelit">${SOURCES.map((source) => `<option value="${source}">${sourceNames[source].replace(' 375 m', '')}</option>`).join('')}</select></label>
+              <div class="segmented" aria-label="Rentang waktu">${DAY_OPTIONS.map((days) => `<button data-days="${days}">${days === 1 ? '24J' : `${days} HARI`}</button>`).join('')}</div>
+            </div>
           </div>
-          <div class="bnpb-grid" id="bnpb-grid"></div>
+          <div class="map-frame">
+            <div id="fire-map" role="img" aria-label="Peta Indonesia dengan titik panas terdeteksi"></div>
+            <button type="button" class="map-unlock" id="map-unlock" hidden><span>Ketuk untuk menjelajah peta</span></button>
+            <div class="map-overline"><span class="map-crosshair">⌖</span> WILAYAH PEMANTAUAN <b>INDONESIA</b></div>
+            <div class="map-layers" id="map-layers" aria-label="Lapisan peta"><button type="button" class="map-layers-toggle" id="map-layers-toggle" aria-expanded="false">Lapisan peta</button><div class="map-layers-body"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label title="Perkiraan PM2.5 model CAMS pada grid ±55 km, saat ini hingga 4 hari ke depan"><input type="checkbox" id="layer-smokegrid" /><i class="layer-swatch smokegrid"></i> Sebaran asap (model)</label><label><input type="checkbox" id="layer-konservasi" checked /><i class="layer-swatch konservasi"></i> Kawasan konservasi</label><label><input type="checkbox" id="layer-lindung" checked /><i class="layer-swatch lindung"></i> Hutan lindung</label><label><input type="checkbox" id="layer-peat" /><i class="layer-swatch gambut"></i> Lahan gambut (KHG)</label><details class="layer-more"><summary>Area penting lainnya</summary>${OVERLAYS.map((overlay) => `<label title="${escapeHtml(overlay.hint)}"><input type="checkbox" id="layer-${overlay.id}" data-overlay="${overlay.id}" /><i class="layer-swatch ${overlay.id}"></i> ${escapeHtml(overlay.label)}</label>`).join('')}</details></div></div>
+            <div class="map-legend"><span title="Titik keyakinan tinggi yang bukan sumber panas tetap; dianimasikan sebagai nyala api"><i class="legend-flame"></i> Diyakini kebakaran</span><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
+            <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
+            <div class="smoke-time" id="smoke-time" hidden><div class="smoke-time-head"><strong>Sebaran asap</strong><span id="smoke-time-label">Memuat…</span></div><input type="range" id="smoke-time-range" min="0" max="0" step="1" value="0" aria-label="Waktu sebaran asap" /><div class="smoke-time-legend"><span><i style="background:#3a7bc8"></i>Sedang</span><span><i style="background:#e0b11f"></i>Tidak sehat</span><span><i style="background:#d8432c"></i>Sangat tidak sehat</span><span><i style="background:#2a1d1b"></i>Berbahaya</span></div></div>
+            <div class="map-credit"><span id="basemap-credit"></span> · Kawasan hutan, KHG, PIPPIB, KEE, hutan adat, mangrove &amp; kerawanan karhutla © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
+          </div>
         </section>
 
         <section class="stats-grid" aria-label="Ringkasan hotspot">
@@ -183,23 +195,12 @@ app.innerHTML = `
           <p class="timeline-note" id="timeline-note"></p>
         </section>
 
-        <section class="map-section" id="map-section">
+        <section class="bnpb-section" id="laporan-bnpb">
           <div class="section-head">
-            <div><div class="section-kicker">SEBARAN GEOGRAFIS</div><h2>Peta hotspot aktif</h2></div>
-            <div class="map-controls">
-              <label class="select-wrap"><span class="sr-only">Sumber satelit</span><select id="source-select" aria-label="Pilih sumber satelit">${SOURCES.map((source) => `<option value="${source}">${sourceNames[source].replace(' 375 m', '')}</option>`).join('')}</select></label>
-              <div class="segmented" aria-label="Rentang waktu">${DAY_OPTIONS.map((days) => `<button data-days="${days}">${days === 1 ? '24J' : `${days} HARI`}</button>`).join('')}</div>
-            </div>
+            <div><div class="section-kicker">LAPORAN RESMI SATGAS KARHUTLA · BNPB</div><h2>Kondisi lapangan di provinsi prioritas</h2></div>
+            <span class="risk-state" id="bnpb-state">Memuat laporan BNPB…</span>
           </div>
-          <div class="map-frame">
-            <div id="fire-map" role="img" aria-label="Peta Indonesia dengan titik panas terdeteksi"></div>
-            <div class="map-overline"><span class="map-crosshair">⌖</span> WILAYAH PEMANTAUAN <b>INDONESIA</b></div>
-            <div class="map-layers" aria-label="Lapisan peta"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label title="Perkiraan PM2.5 model CAMS pada grid ±55 km, saat ini hingga 4 hari ke depan"><input type="checkbox" id="layer-smokegrid" /><i class="layer-swatch smokegrid"></i> Sebaran asap (model)</label><label><input type="checkbox" id="layer-konservasi" checked /><i class="layer-swatch konservasi"></i> Kawasan konservasi</label><label><input type="checkbox" id="layer-lindung" checked /><i class="layer-swatch lindung"></i> Hutan lindung</label><label><input type="checkbox" id="layer-peat" /><i class="layer-swatch gambut"></i> Lahan gambut (KHG)</label><details class="layer-more"><summary>Area penting lainnya</summary>${OVERLAYS.map((overlay) => `<label title="${escapeHtml(overlay.hint)}"><input type="checkbox" id="layer-${overlay.id}" data-overlay="${overlay.id}" /><i class="layer-swatch ${overlay.id}"></i> ${escapeHtml(overlay.label)}</label>`).join('')}</details></div>
-            <div class="map-legend"><span title="Titik keyakinan tinggi yang bukan sumber panas tetap; dianimasikan sebagai nyala api"><i class="legend-flame"></i> Diyakini kebakaran</span><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
-            <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
-            <div class="smoke-time" id="smoke-time" hidden><div class="smoke-time-head"><strong>Sebaran asap</strong><span id="smoke-time-label">Memuat…</span></div><input type="range" id="smoke-time-range" min="0" max="0" step="1" value="0" aria-label="Waktu sebaran asap" /><div class="smoke-time-legend"><span><i style="background:#3a7bc8"></i>Sedang</span><span><i style="background:#e0b11f"></i>Tidak sehat</span><span><i style="background:#d8432c"></i>Sangat tidak sehat</span><span><i style="background:#2a1d1b"></i>Berbahaya</span></div></div>
-            <div class="map-credit"><span id="basemap-credit"></span> · Kawasan hutan, KHG, PIPPIB, KEE, hutan adat, mangrove &amp; kerawanan karhutla © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
-          </div>
+          <div class="bnpb-grid" id="bnpb-grid"></div>
         </section>
 
         <section class="risk-section" id="risk">
@@ -310,8 +311,30 @@ app.innerHTML = `
 
 // ---------- Peta ----------
 
-const map = L.map('fire-map', { preferCanvas: true, zoomControl: false, attributionControl: false, minZoom: 3, maxZoom: 13 })
+const map = L.map('fire-map', { preferCanvas: true, zoomControl: false, attributionControl: false, minZoom: 3, maxZoom: 13, scrollWheelZoom: false })
 map.fitBounds([[-11, 94], [6, 142]], { padding: [12, 12] })
+
+// Peta ada di layar kedua, jadi menggulir halaman jangan tersangkut di peta.
+// Layar sentuh: geser satu jari baru aktif setelah peta diketuk, dan terkunci lagi saat peta keluar layar.
+// Mouse: zoom dengan roda baru aktif setelah peta diklik, dan mati lagi saat kursor keluar peta.
+const touchScreen = window.matchMedia('(pointer: coarse)').matches
+const mapUnlock = document.getElementById('map-unlock') as HTMLButtonElement
+if (touchScreen) {
+  map.dragging.disable()
+  mapUnlock.hidden = false
+  mapUnlock.addEventListener('click', () => {
+    map.dragging.enable()
+    mapUnlock.hidden = true
+  })
+  new IntersectionObserver(([entry]) => {
+    if (entry.isIntersecting || !map.dragging.enabled()) return
+    map.dragging.disable()
+    mapUnlock.hidden = false
+  }).observe(document.getElementById('fire-map')!)
+} else {
+  map.on('click', () => map.scrollWheelZoom.enable())
+  map.getContainer().addEventListener('mouseleave', () => map.scrollWheelZoom.disable())
+}
 // Peta dasar yang bisa dipilih pengunjung. Semua tanpa kunci API; atribusi tampil di kredit peta.
 // Foto satelit harian NASA: VIIRS NOAA-21 melintas di atas Indonesia ±05.00–07.00 UTC dan baru tersedia beberapa
 // jam kemudian, jadi sebelum 10.00 UTC dipakai citra kemarin.
@@ -1289,6 +1312,11 @@ for (const kind of ['konservasi', 'lindung'] as const) {
     else layer.remove()
   })
 }
+// Di ponsel panel lapisan dilipat agar tidak menutupi peta; tombol 'Lapisan peta' membukanya.
+byId('map-layers-toggle').addEventListener('click', (event) => {
+  const open = byId('map-layers').classList.toggle('open')
+  ;(event.currentTarget as HTMLButtonElement).setAttribute('aria-expanded', String(open))
+})
 // Di layar pendek panel lapisan bisa digulir; saat grup dibuka, gulir agar semua lapisannya langsung terlihat.
 document.querySelector<HTMLDetailsElement>('.layer-more')?.addEventListener('toggle', (event) => {
   const details = event.currentTarget as HTMLDetailsElement

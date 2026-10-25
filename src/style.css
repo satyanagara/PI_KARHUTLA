@@ -2535,6 +2535,43 @@ tbody tr:hover td {
   opacity: 0.75;
 }
 
+.map-unlock {
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.map-unlock[hidden] {
+  display: none;
+}
+
+.map-unlock span {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgb(22 37 29 / 0.82);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.map-layers-toggle {
+  display: none;
+}
+
+.map-layers-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .layer-more {
   border-top: 1px solid rgb(22 37 29 / 0.08);
   padding-top: 6px;
@@ -3235,9 +3272,38 @@ tbody tr:hover td {
 
   .map-legend {
     top: auto;
-    right: auto;
-    bottom: 40px;
+    right: 60px;
+    bottom: 12px;
     left: 12px;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .map-layers-toggle {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .map-layers-toggle::after {
+    content: ' ▾';
+  }
+
+  .map-layers.open .map-layers-toggle::after {
+    content: ' ▴';
+  }
+
+  .map-layers:not(.open) .map-layers-body {
+    display: none;
+  }
+
+  .map-layers.open .map-layers-toggle {
+    margin-bottom: 4px;
   }
 
   .map-overline {
@@ -3251,7 +3317,8 @@ tbody tr:hover td {
   }
 
   .smoke-time {
-    bottom: 12px;
+    top: 52px;
+    bottom: auto;
   }
 
   .map-credit {
