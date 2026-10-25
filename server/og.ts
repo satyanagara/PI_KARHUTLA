@@ -7,6 +7,7 @@ import { Resvg, initWasm } from '@resvg/resvg-wasm'
 import { levelIcon } from '../src/icons.ts'
 import { VULNERABLE_SHORT, cigaretteText, streakText } from '../src/impact.ts'
 import { UNHEALTHY_LEVELS } from '../src/risk.ts'
+import { stampText } from '../src/timefmt.ts'
 import type { LocationCheck } from '../src/report-types.ts'
 
 const WIDTH = 1200
@@ -66,7 +67,7 @@ export function buildOgSvg(result: LocationCheck, place: string, source: string)
 
   let y = 118
   let body = ''
-  body += textBlock(['KUALITAS UDARA HARI INI'], left, y, 20, 700, '#6b7570')
+  body += textBlock([`KUALITAS UDARA · ${stampText(result.fetchedAt, result.place?.province).toUpperCase()}`], left, y, 20, 700, '#6b7570')
   y += 76
   const levelLines = wrap(level.label.toUpperCase(), 64, textWidth, 2)
   body += textBlock(levelLines, left, y, 64, 800, '#1d1d1b', 1.1)

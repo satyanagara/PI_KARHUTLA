@@ -1,5 +1,6 @@
 // Membuat informasi kualitas udara terasa dekat dan mendorong tindakan: setara rokok, hari berturut-turut,
 // langkah aman yang bisa dicentang, dan kartu siap bagikan. Ketakutan selalu dipasangkan dengan langkah konkret.
+import { shortPlace, stampText } from './timefmt.ts'
 import { cigarettesPerDay, type IspuLevel } from './risk.ts'
 import { levelIcon } from './icons.ts'
 
@@ -161,6 +162,10 @@ export type ShareCard = {
   pm25: number | null
   streakDays: number
   note: string
+  // Waktu data (ISO) dan provinsi/bujur untuk menentukan WIB/WITA/WIT.
+  at: string
+  province?: string | null
+  lon?: number | null
 }
 
 function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number) {
@@ -212,7 +217,7 @@ export async function renderShareCard(card: ShareCard): Promise<Blob> {
   context.font = font(800, 84)
   wrapText(context, card.level.label.toUpperCase(), width - 400).forEach((line, index) => context.fillText(line, 330, 235 + index * 90))
   context.font = font(500, 34)
-  context.fillText('kualitas udara hari ini', 330, card.level.label.length > 12 ? 410 : 320)
+  context.fillText(`per ${stampText(card.at, card.province, card.lon)}`, 330, card.level.label.length > 12 ? 410 : 320)
 
   context.font = font(700, 44)
   wrapText(context, card.place, width - 140).slice(0, 2).forEach((line, index) => context.fillText(line, 70, 470 + index * 54))
@@ -299,7 +304,7 @@ export function whatsappLink(text: string) {
 export function shortShareText(card: ShareCard) {
   const cigarettes = cigaretteText(card.pm25)
   const parts = [
-    `Kualitas udara di ${card.place} hari ini: ${card.level.label.toUpperCase()}.`,
+    `Kualitas udara di ${shortPlace(card.place)} (${stampText(card.at, card.province, card.lon)}): ${card.level.label.toUpperCase()}.`,
     cigarettes ? `Setara mengisap ${cigarettes} sehari, termasuk bagi anak-anak.` : '',
     whoMultipleText(card.pm25) ? `Asap halusnya ${whoMultipleText(card.pm25)}.` : '',
     // Versi ringkas agar tetap muat bersama ukuran WHO dalam batas karakter X.
@@ -350,7 +355,7 @@ export function shareText(card: ShareCard) {
   const cigarettes = cigaretteText(card.pm25)
   const streak = streakText(card.streakDays)
   return [
-    `Kualitas udara di ${card.place} hari ini: ${card.level.label.toUpperCase()}.`,
+    `Kualitas udara di ${card.place} (${stampText(card.at, card.province, card.lon)}): ${card.level.label.toUpperCase()}.`,
     cigarettes ? `Menghirupnya seharian setara mengisap ${cigarettes}, termasuk bagi bayi dan anak-anak.` : '',
     whoMultipleText(card.pm25) ? `Kadar asap halusnya ${whoMultipleText(card.pm25)} (15 µg/m³ rata-rata 24 jam).` : '',
     streak ? `Udara tidak sehat ${streak}.` : '',

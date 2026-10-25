@@ -14,7 +14,7 @@ COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY data ./data
 COPY server ./server
-COPY src/risk.ts src/report-types.ts src/icons.ts src/impact.ts ./src/
+COPY src/risk.ts src/report-types.ts src/icons.ts src/impact.ts src/timefmt.ts ./src/
 COPY --from=build /app/node_modules/@resvg ./node_modules/@resvg
 # Folder cache (laporan BNPB terakhir) milik user node; dipasang sebagai volume saat dijalankan.
 RUN mkdir -p /app/.cache && chown node:node /app/.cache

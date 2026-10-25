@@ -5,6 +5,7 @@ import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compas
 import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, trashEquivalent, vulnerableBlock, whoMultipleText, type ShareCard } from './impact.ts'
 import { levelIcon, levelMeter } from './icons.ts'
 import { FlameLayer } from './flames.ts'
+import { hourText } from './timefmt.ts'
 import { footballFields, prognosis, speciesText, visibilityComparison, wildlifeFor } from './context.ts'
 import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type TimelineDay, type TimelineReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
@@ -462,8 +463,8 @@ function renderStatus(data: Report) {
   impact.hidden = !worstTown || !UNHEALTHY_LEVELS.includes(worstTown.level.key)
   if (worstTown && !impact.hidden) {
     const streak = streakText(worstTown.unhealthyDays)
-    impact.innerHTML = `Hari ini, menghirup udara di <b>${escapeHtml(worstTown.name)}</b> seharian setara mengisap <b class="impact-number">${cigaretteText(worstTown.pm25)}</b>, termasuk bagi bayi dan anak-anak${streak ? `, dan ini sudah <b>${streak}</b>` : ''}.${whoMultipleText(worstTown.pm25) ? ` Kadar asap halusnya <b>${whoMultipleText(worstTown.pm25)}</b>.` : ''}<span class="impact-vulnerable">${VULNERABLE_SHORT}</span><small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small>`
-    statusCard = { level: worstTown.level, place: `${worstTown.name}, ${worstTown.province}`, pm25: worstTown.pm25, streakDays: worstTown.unhealthyDays, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · ' + wibFormat.format(new Date(data.fetchedAt)) + ' WIB' }
+    impact.innerHTML = `Per ${hourText(data.fetchedAt, worstTown.province, worstTown.lon)}, menghirup udara di <b>${escapeHtml(worstTown.name)}</b> seharian setara mengisap <b class="impact-number">${cigaretteText(worstTown.pm25)}</b>, termasuk bagi bayi dan anak-anak${streak ? `, dan ini sudah <b>${streak}</b>` : ''}.${whoMultipleText(worstTown.pm25) ? ` Kadar asap halusnya <b>${whoMultipleText(worstTown.pm25)}</b>.` : ''}<span class="impact-vulnerable">${VULNERABLE_SHORT}</span><small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth).</small>`
+    statusCard = { level: worstTown.level, place: `${worstTown.name}, ${worstTown.province}`, pm25: worstTown.pm25, streakDays: worstTown.unhealthyDays, at: data.fetchedAt, province: worstTown.province, lon: worstTown.lon, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · ' + wibFormat.format(new Date(data.fetchedAt)) + ' WIB' }
     byId('status-share').innerHTML = shareMenu('status', statusCard, `https://${location.host}/?cek=${worstTown.lat.toFixed(4)},${worstTown.lon.toFixed(4)}`)
   }
   byId('status-share').hidden = impact.hidden
@@ -1097,10 +1098,10 @@ function renderCheck(result: LocationCheck, lat: number, lon: number, label: str
   const pm25 = result.air?.pm25Mean24 ?? null
   const cigarettes = cigaretteText(pm25)
   const streak = streakText(result.air?.unhealthyDays ?? 0)
-  checkCard = { level: result.level, place, pm25, streakDays: result.air?.unhealthyDays ?? 0, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · prakiraan BMKG' }
+  checkCard = { level: result.level, place, pm25, streakDays: result.air?.unhealthyDays ?? 0, at: result.fetchedAt, province: result.place?.province, lon, note: 'Perkiraan model kualitas udara (CAMS) · titik panas NASA FIRMS · prakiraan BMKG' }
   checkResult.innerHTML = `
     <div class="check-summary" style="--level:${result.level.color}">
-      <div class="check-head">${levelIcon(result.level.key, 52)}<div><small>Udara yang Anda hirup hari ini di</small><strong>${escapeHtml(place)}</strong><span class="ispu-badge ${result.level.key}" style="--level:${result.level.color}">${result.level.label}</span></div></div>
+      <div class="check-head">${levelIcon(result.level.key, 52)}<div><small>Udara yang Anda hirup di</small><strong>${escapeHtml(place)}</strong><small class="check-time">Rata-rata 24 jam hingga ${hourText(result.fetchedAt, result.place?.province, lon)}</small><span class="ispu-badge ${result.level.key}" style="--level:${result.level.color}">${result.level.label}</span></div></div>
       ${levelMeter(result.level.key)}
       ${cigarettes ? `<p class="impact-line">Menghirup udara ini seharian setara mengisap <b class="impact-number">${cigarettes}</b>, termasuk bagi bayi dan anak-anak${streak && UNHEALTHY_LEVELS.includes(result.level.key) ? `. Udara tidak sehat <b>${streak}</b>` : ''}.${levelRank(result.level.key) >= levelRank('sangat-tidak-sehat') ? ' Rasanya seperti berdiri seharian di dalam asap pembakaran sampah.' : ''}${whoMultipleText(pm25) ? ` Kadar asap halusnya <b>${whoMultipleText(pm25)}</b>.` : ''}<small>Perkiraan dari model kualitas udara; 22 µg/m³ PM2.5 sehari ≈ 1 batang rokok (Berkeley Earth); batas aman WHO 15 µg/m³ rata-rata 24 jam.</small></p>` : ''}
       ${prognosisBlock(result)}
