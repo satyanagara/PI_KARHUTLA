@@ -15,6 +15,7 @@ import { getBnpbReport } from './bnpb.ts'
 import { getCctv } from './cctv.ts'
 import { prepareOg, renderOgPng } from './og.ts'
 import { getTimeline, startTimeline } from './timeline.ts'
+import { getSmokeGrid, startSmokeGrid } from './smokegrid.ts'
 import { cacheStatus, checkLocation, getReport, loadReference, searchPlaces } from './report.ts'
 
 // Server tanpa IPv6: dahulukan IPv4 dan beri waktu cukup per percobaan koneksi. Batas bawaan Node (250 ms)
@@ -50,7 +51,7 @@ const SECURITY_HEADERS = {
     "default-src 'self'",
     `script-src 'self'${GA_ID ? ' https://www.googletagmanager.com' : ''}`,
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: https://server.arcgisonline.com https://tile.openstreetmap.org https://i.ytimg.com${GA_ID ? ' https://*.google-analytics.com https://*.googletagmanager.com' : ''}`,
+    `img-src 'self' data: https://server.arcgisonline.com https://tile.openstreetmap.org https://gibs.earthdata.nasa.gov https://i.ytimg.com${GA_ID ? ' https://*.google-analytics.com https://*.googletagmanager.com' : ''}`,
     "frame-src https://www.youtube-nocookie.com",
     `connect-src 'self'${GA_ID ? ' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com' : ''}`,
     "font-src 'self'",
@@ -315,6 +316,15 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/hotspots') return allowed(req, res) && (await handleHotspots(req, res, url))
     if (url.pathname === '/api/lokasi') return allowed(req, res) && (await handleLocation(req, res, url))
     if (url.pathname === '/og/cek.png') return allowed(req, res) && (await handleOgImage(req, res, url))
+    if (url.pathname === '/api/sebaran-asap') {
+      if (!allowed(req, res)) return
+      const smokeGrid = getSmokeGrid()
+      if ('building' in smokeGrid) {
+        res.writeHead(202, { ...SECURITY_HEADERS, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '30' })
+        return res.end(JSON.stringify(smokeGrid))
+      }
+      return sendJson(req, res, smokeGrid, 'public, max-age=900')
+    }
     if (url.pathname === '/api/timeline') {
       if (!allowed(req, res)) return
       const timeline = getTimeline()
@@ -387,6 +397,7 @@ console.log(GA_ID ? `[server] Google Analytics aktif (${GA_ID})` : '[server] Goo
 server.listen(PORT, HOST, () => console.log(`[server] berjalan di http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))
 // Hangatkan laporan bawaan saat start agar permintaan pertama (termasuk perayap pratinjau media sosial) tidak menunggu lama.
 void startTimeline()
+void startSmokeGrid()
 getReport(DEFAULT_SOURCE as Source, 3)
   .then(() => console.log('[server] laporan bawaan siap'))
   .catch((error) => console.error('[server] pemanasan laporan gagal:', error instanceof Error ? error.message : error))

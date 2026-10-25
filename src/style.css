@@ -2474,6 +2474,67 @@ tbody tr:hover td {
 .layer-swatch.mangrove { border-color: #0e7c66; background: rgb(22 160 133 / 0.45); }
 .layer-swatch.rawan { border-color: #b03a2e; background: linear-gradient(135deg, rgb(232 145 58 / 0.4) 50%, rgb(192 57 43 / 0.45) 50%); }
 
+.layer-swatch.smokegrid { border-color: #b8860b; background: linear-gradient(90deg, rgb(58 123 200 / 0.4), rgb(224 177 31 / 0.55), rgb(216 67 44 / 0.6)); }
+
+.smoke-time {
+  position: absolute;
+  left: 50%;
+  bottom: 48px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, calc(100% - 32px));
+  padding: 9px 12px;
+  border: 1px solid rgb(22 37 29 / 0.08);
+  border-radius: 9px;
+  background: rgb(247 249 246 / 0.94);
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+  color: var(--ink-soft);
+  transform: translateX(-50%);
+}
+
+.smoke-time[hidden] {
+  display: none;
+}
+
+.smoke-time-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.smoke-time-head strong {
+  color: var(--ink);
+}
+
+.smoke-time input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--fire);
+}
+
+.smoke-time-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 10.5px;
+}
+
+.smoke-time-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.smoke-time-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  opacity: 0.75;
+}
+
 .layer-more {
   border-top: 1px solid rgb(22 37 29 / 0.08);
   padding-top: 6px;
@@ -3187,6 +3248,10 @@ tbody tr:hover td {
     top: 12px;
     left: 12px;
     max-height: calc(100% - 24px);
+  }
+
+  .smoke-time {
+    bottom: 12px;
   }
 
   .map-credit {

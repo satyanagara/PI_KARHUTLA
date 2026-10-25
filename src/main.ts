@@ -5,7 +5,7 @@ import { ISPU_ADVICE, ISPU_LEVELS, SETTLEMENT_ALERT_KM, UNHEALTHY_LEVELS, compas
 import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, shareText, streakText, trashEquivalent, vulnerableBlock, whoMultipleText, type ShareCard } from './impact.ts'
 import { levelIcon, levelMeter } from './icons.ts'
 import { FlameLayer } from './flames.ts'
-import { hourText } from './timefmt.ts'
+import { hourText, stampText } from './timefmt.ts'
 import { footballFields, prognosis, speciesText, visibilityComparison, wildlifeFor } from './context.ts'
 import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type TimelineDay, type TimelineReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
@@ -194,9 +194,10 @@ app.innerHTML = `
           <div class="map-frame">
             <div id="fire-map" role="img" aria-label="Peta Indonesia dengan titik panas terdeteksi"></div>
             <div class="map-overline"><span class="map-crosshair">⌖</span> WILAYAH PEMANTAUAN <b>INDONESIA</b></div>
-            <div class="map-layers" aria-label="Lapisan peta"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label><input type="checkbox" id="layer-konservasi" checked /><i class="layer-swatch konservasi"></i> Kawasan konservasi</label><label><input type="checkbox" id="layer-lindung" checked /><i class="layer-swatch lindung"></i> Hutan lindung</label><label><input type="checkbox" id="layer-peat" /><i class="layer-swatch gambut"></i> Lahan gambut (KHG)</label><details class="layer-more"><summary>Area penting lainnya</summary>${OVERLAYS.map((overlay) => `<label title="${escapeHtml(overlay.hint)}"><input type="checkbox" id="layer-${overlay.id}" data-overlay="${overlay.id}" /><i class="layer-swatch ${overlay.id}"></i> ${escapeHtml(overlay.label)}</label>`).join('')}</details></div>
+            <div class="map-layers" aria-label="Lapisan peta"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label title="Perkiraan PM2.5 model CAMS pada grid ±55 km, saat ini hingga 4 hari ke depan"><input type="checkbox" id="layer-smokegrid" /><i class="layer-swatch smokegrid"></i> Sebaran asap (model)</label><label><input type="checkbox" id="layer-konservasi" checked /><i class="layer-swatch konservasi"></i> Kawasan konservasi</label><label><input type="checkbox" id="layer-lindung" checked /><i class="layer-swatch lindung"></i> Hutan lindung</label><label><input type="checkbox" id="layer-peat" /><i class="layer-swatch gambut"></i> Lahan gambut (KHG)</label><details class="layer-more"><summary>Area penting lainnya</summary>${OVERLAYS.map((overlay) => `<label title="${escapeHtml(overlay.hint)}"><input type="checkbox" id="layer-${overlay.id}" data-overlay="${overlay.id}" /><i class="layer-swatch ${overlay.id}"></i> ${escapeHtml(overlay.label)}</label>`).join('')}</details></div>
             <div class="map-legend"><span title="Titik keyakinan tinggi yang bukan sumber panas tetap; dianimasikan sebagai nyala api"><i class="legend-flame"></i> Diyakini kebakaran</span><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
             <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
+            <div class="smoke-time" id="smoke-time" hidden><div class="smoke-time-head"><strong>Sebaran asap</strong><span id="smoke-time-label">Memuat…</span></div><input type="range" id="smoke-time-range" min="0" max="0" step="1" value="0" aria-label="Waktu sebaran asap" /><div class="smoke-time-legend"><span><i style="background:#3a7bc8"></i>Sedang</span><span><i style="background:#e0b11f"></i>Tidak sehat</span><span><i style="background:#d8432c"></i>Sangat tidak sehat</span><span><i style="background:#2a1d1b"></i>Berbahaya</span></div></div>
             <div class="map-credit"><span id="basemap-credit"></span> · Kawasan hutan, KHG, PIPPIB, KEE, hutan adat, mangrove &amp; kerawanan karhutla © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
           </div>
         </section>
@@ -291,6 +292,7 @@ app.innerHTML = `
             <div><h3>Asap &amp; ISPU</h3><p>Titik dikelompokkan per ±20 km. Untuk 30 kluster teratas, angin dan PM2.5 diambil dari <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (model CAMS). Kategori mengikuti ISPU PM2.5 rata-rata 24 jam (PermenLHK P.14/2020). Jalur asap adalah kerucut 6 jam searah angin.</p></div>
             <div><h3>Sumber panas tetap</h3><p>Titik yang terdeteksi pada ≥3 hari berbeda dalam 5 hari terakhir di tempat yang sama (±440 m) dan dekat permukiman ditandai abu-abu sebagai kemungkinan pabrik, pembangkit, atau pembakaran berulang, lalu tidak dihitung dalam analisis risiko. Titik tetap tampil di peta dan CSV. Titik di lahan gambut atau kawasan hutan tidak pernah ditandai.</p></div>
             <div><h3>Setara sampah dibakar</h3><p>Skala asap sebuah wilayah api dibandingkan dengan pembakaran sampah rumah tangga: dari kekuatan api satelit (FRP) diperkirakan biomassa yang terbakar (0,368 kg per MJ, Wooster dkk. 2005) dan PM2.5 yang dilepaskan (±9 g/kg vegetasi, Akagi dkk. 2011; ±17 g/kg gambut, Stockwell dkk. 2016), lalu dibagi emisi pembakaran sampah terbuka (±9,8 g/kg, Wiedinmyer dkk. 2014) dan sampah rumah tangga Indonesia (±2,7 kg/hari, SIPSN KLHK). Tiap deteksi dianggap mewakili ±12 jam. Ini gambaran skala dengan ketelitian 2–3 kali lipat, bukan pengukuran, dan tidak tersedia untuk data BRIN/LAPAN yang tanpa FRP.</p></div>
+            <div><h3>Sebaran asap dan foto satelit</h3><p>Lapisan "Sebaran asap (model)" menampilkan perkiraan PM2.5 dari model CAMS (lewat Open-Meteo) pada grid ±55 km di daratan Indonesia, dari saat ini hingga 4 hari ke depan per 3 jam, diperbarui tiap 6 jam. Resolusinya kasar dan bisa meleset di sekitar api kecil. Peta dasar "Foto satelit harian NASA" memakai citra VIIRS NOAA-21 dari NASA Global Imagery Browse Services (GIBS); citra hari ini baru tersedia setelah satelit melintas siang hari, dan asap serta awan sama-sama tampak putih keabu-abuan.</p></div>
             <div><h3>Lapisan area penting</h3><p>Semua batas area berasal dari SIGAP Kementerian Kehutanan. Moratorium (PIPPIB 2026 periode I) adalah hutan alam primer dan gambut yang tidak boleh diberi izin baru, sehingga api di dalamnya patut dicurigai sebagai pembukaan lahan. Kawasan Ekosistem Esensial mencakup koridor satwa, taman kehati, mangrove, karst, dan lahan basah di luar kawasan konservasi. Hutan adat adalah yang sudah ditetapkan dengan SK. Mangrove dari Peta Mangrove Nasional 2024; kerawanan karhutla dari peta 2025, hanya kelas tinggi dan sangat tinggi. Lapisan besar disederhanakan untuk tampilan (detail ±250–600 m), jadi tepi batasnya tidak presisi.</p></div>
             <div><h3>Satwa, luas, dan prakiraan</h3><p>Satwa unggulan per taman nasional (status kritis/genting menurut IUCN Red List) ditampilkan bila ada api di dalam kawasan itu. Luas terbakar dibandingkan dengan lapangan sepak bola (0,714 ha) dan DKI Jakarta (±661 km²); jarak pandang dengan panjang lapangan (105 m). Prakiraan "kapan membaik" memakai rata-rata PM2.5 model CAMS per 24 jam untuk 4 hari ke depan, sehingga bisa meleset bila cuaca berubah.</p></div>
             <div><h3>Setara PLTU dan batas WHO</h3><p>Pembanding PLTU memakai batas partikulat PLTU batubara yang beroperasi sebelum 2019, yaitu 100 mg/Nm³ (Permen LHK P.15/2019), dan gas buang PLTU 1.000 MW ±2,8 juta Nm³/jam: paling banyak ±6,7 ton partikulat per hari. Batas itu mencakup semua partikulat, bukan hanya PM2.5, jadi perbandingan ini cenderung meremehkan api. Asap kebakaran tetap lebih berbahaya walau emisinya setara, karena menyebar di ketinggian napas, sedangkan asap PLTU dilepas dari cerobong ratusan meter; PLTU juga sumber polusi, bukan pembanding yang aman. "Kali batas aman WHO" membandingkan rata-rata PM2.5 24 jam dengan pedoman WHO 2021 (15 µg/m³).</p></div>
@@ -311,10 +313,16 @@ app.innerHTML = `
 const map = L.map('fire-map', { preferCanvas: true, zoomControl: false, attributionControl: false, minZoom: 3, maxZoom: 13 })
 map.fitBounds([[-11, 94], [6, 142]], { padding: [12, 12] })
 // Peta dasar yang bisa dipilih pengunjung. Semua tanpa kunci API; atribusi tampil di kredit peta.
+// Foto satelit harian NASA: VIIRS NOAA-21 melintas di atas Indonesia ±05.00–07.00 UTC dan baru tersedia beberapa
+// jam kemudian, jadi sebelum 10.00 UTC dipakai citra kemarin.
+const GIBS_DATE = new Date(Date.now() - (new Date().getUTCHours() < 10 ? 24 * 3600 * 1000 : 0)).toISOString().slice(0, 10)
+const GIBS_LABEL = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${GIBS_DATE}T00:00:00Z`))
+
 const BASEMAPS = [
   { key: 'esri-gray', label: 'Abu-abu kalem (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', maxZoom: 16, credit: 'Peta dasar © Esri, HERE, Garmin, kontributor OpenStreetMap' },
   { key: 'osm', label: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, credit: 'Peta dasar © kontributor OpenStreetMap (ODbL)' },
   { key: 'esri-satellite', label: 'Citra satelit (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', maxZoom: 18, credit: 'Citra © Esri, Maxar, Earthstar Geographics' },
+  { key: 'nasa-viirs', label: `Foto satelit harian NASA (${GIBS_LABEL})`, url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_NOAA21_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`, maxZoom: 13, maxNativeZoom: 9, credit: `Foto satelit ${GIBS_LABEL}: VIIRS NOAA-21, citra dari NASA Global Imagery Browse Services (GIBS), ESDIS; asap dan awan sama-sama tampak putih keabu-abuan` },
 ] as const
 type BasemapKey = (typeof BASEMAPS)[number]['key']
 let basemapLayer: L.TileLayer | null = null
@@ -332,7 +340,7 @@ function readBasemapChoice(): BasemapKey {
 function setBasemap(key: BasemapKey) {
   const basemap = BASEMAPS.find((item) => item.key === key) ?? BASEMAPS[0]
   basemapLayer?.remove()
-  basemapLayer = L.tileLayer(basemap.url, { maxZoom: basemap.maxZoom }).addTo(map)
+  basemapLayer = L.tileLayer(basemap.url, { maxZoom: basemap.maxZoom, maxNativeZoom: 'maxNativeZoom' in basemap ? basemap.maxNativeZoom : undefined }).addTo(map)
   basemapLayer.bringToBack()
   byId('basemap-credit').textContent = basemap.credit
   byId<HTMLSelectElement>('basemap-select').value = basemap.key
@@ -354,6 +362,11 @@ const smokeLayer = L.layerGroup().addTo(map)
 const areaLayers: Partial<Record<'konservasi' | 'lindung', L.GeoJSON>> = {}
 let areaLoad: Promise<void> | null = null
 const overlayLayers: Record<string, L.GeoJSON> = {}
+const smokeGridLayer = L.layerGroup()
+let smokeGrid: { fetchedAt: string; times: string[]; points: [number, number][]; values: number[][]; step: number } | null = null
+let smokeGridCells: L.Rectangle[] = []
+let smokeGridIndex = 0
+let smokeGridRetries = 0
 const overlayLoads: Record<string, Promise<void>> = {}
 let peatLayer: L.GeoJSON | null = null
 let peatLoad: Promise<void> | null = null
@@ -933,6 +946,60 @@ function loadAreas() {
   return areaLoad
 }
 
+// ---------- Sebaran asap (model) ----------
+
+const SMOKE_GRID_OPACITY: Record<string, number> = { sedang: 0.16, 'tidak-sehat': 0.3, 'sangat-tidak-sehat': 0.4, berbahaya: 0.5 }
+
+function paintSmokeGrid() {
+  if (!smokeGrid) return
+  const values = smokeGrid.values[smokeGridIndex]
+  smokeGridCells.forEach((cell, index) => {
+    const pm25 = values[index]
+    const level = ispuLevel(pm25 < 0 ? null : pm25)
+    const opacity = SMOKE_GRID_OPACITY[level.key] ?? 0
+    cell.setStyle({ fillColor: level.color, fillOpacity: opacity })
+  })
+  byId('smoke-time-label').textContent = stampText(`${smokeGrid.times[smokeGridIndex]}:00:00Z`)
+}
+
+function buildSmokeGrid() {
+  if (!smokeGrid) return
+  smokeGridLayer.clearLayers()
+  const half = smokeGrid.step / 2
+  smokeGridCells = smokeGrid.points.map(([lat, lon], index) => L.rectangle([[lat - half, lon - half], [lat + half, lon + half]], { pane: 'smoke', stroke: false, fillOpacity: 0, interactive: true })
+    .bindTooltip(() => {
+      const pm25 = smokeGrid!.values[smokeGridIndex][index]
+      return pm25 < 0 ? 'Data tidak tersedia' : `PM2.5 ±${pm25} µg/m³ · ${ispuLevel(pm25).label}<br><small>Perkiraan model CAMS, grid ±55 km</small>`
+    }, { sticky: true })
+    .addTo(smokeGridLayer))
+  const range = byId<HTMLInputElement>('smoke-time-range')
+  range.max = String(smokeGrid.times.length - 1)
+  // Mulai dari jam terdekat dengan sekarang.
+  const nowHour = new Date().toISOString().slice(0, 13)
+  smokeGridIndex = Math.max(0, smokeGrid.times.findIndex((time) => time >= nowHour))
+  range.value = String(smokeGridIndex)
+  paintSmokeGrid()
+}
+
+async function loadSmokeGrid() {
+  try {
+    const response = await fetch('/api/sebaran-asap')
+    const body = await response.json().catch(() => null)
+    if (response.status === 202 && smokeGridRetries < 10) {
+      smokeGridRetries++
+      byId('smoke-time-label').textContent = 'Menyiapkan data (pertama kali ±2 menit)…'
+      setTimeout(() => void loadSmokeGrid(), 30000)
+      return
+    }
+    if (!response.ok || !body?.points) throw new Error('Data sebaran asap belum tersedia.')
+    smokeGridRetries = 0
+    smokeGrid = body
+    buildSmokeGrid()
+  } catch (error) {
+    byId('smoke-time-label').textContent = error instanceof Error ? error.message : 'Data sebaran asap belum tersedia.'
+  }
+}
+
 function loadOverlay(id: string) {
   const overlay = OVERLAYS.find((item) => item.id === id)
   if (!overlay) return Promise.resolve()
@@ -1198,6 +1265,18 @@ document.querySelectorAll<HTMLButtonElement>('[data-days]').forEach((button) => 
   })
 })
 
+byId<HTMLInputElement>('layer-smokegrid').addEventListener('change', (event) => {
+  const on = (event.target as HTMLInputElement).checked
+  byId('smoke-time').hidden = !on
+  if (on) {
+    smokeGridLayer.addTo(map)
+    if (!smokeGrid) void loadSmokeGrid()
+  } else smokeGridLayer.remove()
+})
+byId<HTMLInputElement>('smoke-time-range').addEventListener('input', (event) => {
+  smokeGridIndex = Number((event.target as HTMLInputElement).value)
+  paintSmokeGrid()
+})
 byId<HTMLInputElement>('layer-smoke').addEventListener('change', (event) => {
   if ((event.target as HTMLInputElement).checked) smokeLayer.addTo(map)
   else smokeLayer.remove()
@@ -1310,6 +1389,7 @@ setInterval(() => {
     void refreshData()
     void loadBnpb()
     void loadTimeline()
+    if (map.hasLayer(smokeGridLayer)) void loadSmokeGrid()
   }
 }, AUTO_REFRESH_MS)
 
