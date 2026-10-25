@@ -379,6 +379,7 @@ export function buildSmoke(cluster: Cluster, reading: SmokeReading, settlements:
   let count = 0
   let population = 0
   const towns: Settlement[] = []
+  const villages: { item: Settlement; km: number }[] = []
   settlements.forEachNear(cluster.lat, cluster.lon, reachKm, (item) => {
     const km = distanceKm(cluster.lat, cluster.lon, item.lat, item.lon)
     if (km > reachKm) return
@@ -387,8 +388,12 @@ export function buildSmoke(cluster: Cluster, reading: SmokeReading, settlements:
     count++
     population += item.population
     if (item.rank >= 2) towns.push(item)
+    else villages.push({ item, km })
   })
   towns.sort((a, b) => b.rank - a.rank || b.population - a.population)
+  // Saat angin lemah jalur asap sering hanya melewati desa (hanya ±1.700 dari 257 ribu permukiman GeoNames berstatus
+  // kota). Tanpa cadangan ini daftar kota terdampak kosong, sehingga kalimat dampak dan tombol bagikan ikut hilang.
+  if (!towns.length) towns.push(...villages.sort((a, b) => a.km - b.km).slice(0, 3).map(({ item }) => item))
 
   return {
     ...reading,
