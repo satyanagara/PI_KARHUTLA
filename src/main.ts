@@ -127,9 +127,9 @@ app.innerHTML = `
               <div><div class="status-level"><span class="status-pill" id="status-pill">Memuat…</span><span class="status-scope" id="status-scope"></span></div>
               <h2 id="status-headline">Mengambil data satelit terbaru…</h2></div></div>
             <p class="impact-line" id="status-impact" hidden></p>
+            <div id="status-share" hidden></div>
             <ul class="status-points" id="status-points"></ul>
             <div class="status-advice" id="status-advice" hidden><strong>Yang perlu dilakukan</strong><p id="status-advice-text"></p></div>
-            <div id="status-share" hidden></div>
             <p class="status-emergency">Melihat api atau asap pekat di sekitar Anda? Hubungi <b>112</b> atau BPBD setempat.</p>
           </article>
           <article class="check-card" id="cek-lokasi">
