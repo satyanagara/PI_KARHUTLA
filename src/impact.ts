@@ -295,20 +295,22 @@ export function whatsappLink(text: string) {
   return `https://wa.me/?text=${encodeURIComponent(text)}`
 }
 
-// Teks pendek untuk X (batas 280 karakter termasuk tautan).
+// Teks pendek untuk X: batas 280 karakter, tautan selalu dihitung 23 karakter + spasi, jadi teks maksimal 250.
 export function shortShareText(card: ShareCard) {
   const cigarettes = cigaretteText(card.pm25)
   const parts = [
     `Kualitas udara di ${card.place} hari ini: ${card.level.label.toUpperCase()}.`,
     cigarettes ? `Setara mengisap ${cigarettes} sehari, termasuk bagi anak-anak.` : '',
-    UNHEALTHY.includes(card.level.key) ? VULNERABLE_SHORT : '',
+    whoMultipleText(card.pm25) ? `Asap halusnya ${whoMultipleText(card.pm25)}.` : '',
+    // Versi ringkas agar tetap muat bersama ukuran WHO dalam batas karakter X.
+    UNHEALTHY.includes(card.level.key) ? 'Anak-anak dan lansia paling terancam.' : '',
   ].filter(Boolean)
   let text = parts.join(' ')
-  while (text.length > 230 && parts.length > 1) {
+  while (text.length > 250 && parts.length > 1) {
     parts.pop()
     text = parts.join(' ')
   }
-  return text.length > 230 ? `${text.slice(0, 227)}…` : text
+  return text.length > 250 ? `${text.slice(0, 247)}…` : text
 }
 
 // Tautan bagikan per platform. Instagram tidak punya tautan bagikan web; dipakai gambar lewat menu bagikan perangkat.
@@ -350,6 +352,7 @@ export function shareText(card: ShareCard) {
   return [
     `Kualitas udara di ${card.place} hari ini: ${card.level.label.toUpperCase()}.`,
     cigarettes ? `Menghirupnya seharian setara mengisap ${cigarettes}, termasuk bagi bayi dan anak-anak.` : '',
+    whoMultipleText(card.pm25) ? `Kadar asap halusnya ${whoMultipleText(card.pm25)} (15 µg/m³ rata-rata 24 jam).` : '',
     streak ? `Udara tidak sehat ${streak}.` : '',
     UNHEALTHY.includes(card.level.key) ? VULNERABLE_SHORT : '',
     `Lakukan sekarang: ${(SAFETY_STEPS[card.level.key] ?? SAFETY_STEPS.na)[0]}`,
