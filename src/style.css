@@ -2547,6 +2547,8 @@ tbody tr:hover td {
   background: transparent;
   font: inherit;
   cursor: pointer;
+  /* Hanya labelnya yang bisa diketuk, agar tombol zoom dan layar penuh di bawahnya tetap berfungsi. */
+  pointer-events: none;
 }
 
 .map-unlock[hidden] {
@@ -2554,6 +2556,7 @@ tbody tr:hover td {
 }
 
 .map-unlock span {
+  pointer-events: auto;
   padding: 8px 14px;
   border-radius: 999px;
   background: rgb(22 37 29 / 0.82);
@@ -2562,14 +2565,67 @@ tbody tr:hover td {
   color: #fff;
 }
 
+/* Layar penuh: asli (Fullscreen API) atau dibentangkan dengan CSS (iPhone). */
+.map-frame:fullscreen {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+.map-frame.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  height: 100vh;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+
+body.map-full {
+  overflow: hidden;
+}
+
+.map-fullscreen a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+}
+
 .map-layers-toggle {
-  display: none;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.map-layers-toggle::after {
+  content: ' ▾';
+}
+
+.map-layers.open .map-layers-toggle::after {
+  content: ' ▴';
+}
+
+.map-layers.open .map-layers-toggle {
+  margin-bottom: 4px;
 }
 
 .map-layers-body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.map-layers:not(.open) .map-layers-body {
+  display: none;
 }
 
 .layer-more {
@@ -3373,33 +3429,6 @@ tbody tr:hover td {
     left: 12px;
     flex-wrap: wrap;
     gap: 4px 10px;
-  }
-
-  .map-layers-toggle {
-    display: block;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    font-weight: 600;
-    color: var(--ink);
-    cursor: pointer;
-  }
-
-  .map-layers-toggle::after {
-    content: ' ▾';
-  }
-
-  .map-layers.open .map-layers-toggle::after {
-    content: ' ▴';
-  }
-
-  .map-layers:not(.open) .map-layers-body {
-    display: none;
-  }
-
-  .map-layers.open .map-layers-toggle {
-    margin-bottom: 4px;
   }
 
   .map-overline {

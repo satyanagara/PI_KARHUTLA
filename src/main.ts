@@ -314,12 +314,11 @@ app.innerHTML = `
 
 // ---------- Peta ----------
 
-const map = L.map('fire-map', { preferCanvas: true, zoomControl: false, attributionControl: false, minZoom: 3, maxZoom: 13, scrollWheelZoom: false })
+const map = L.map('fire-map', { preferCanvas: true, zoomControl: false, attributionControl: false, minZoom: 3, maxZoom: 13 })
 map.fitBounds([[-11, 94], [6, 142]], { padding: [12, 12] })
 
-// Peta ada di layar kedua, jadi menggulir halaman jangan tersangkut di peta.
-// Layar sentuh: geser satu jari baru aktif setelah peta diketuk, dan terkunci lagi saat peta keluar layar.
-// Mouse: zoom dengan roda baru aktif setelah peta diklik, dan mati lagi saat kursor keluar peta.
+// Layar sentuh: peta ada di layar kedua, jadi geser satu jari baru aktif setelah peta diketuk (agar menggulir
+// halaman tidak tersangkut di peta), dan terkunci lagi saat peta keluar layar. Mouse: roda langsung memperbesar peta.
 const touchScreen = window.matchMedia('(pointer: coarse)').matches
 const mapUnlock = document.getElementById('map-unlock') as HTMLButtonElement
 if (touchScreen) {
@@ -334,9 +333,6 @@ if (touchScreen) {
     map.dragging.disable()
     mapUnlock.hidden = false
   }).observe(document.getElementById('fire-map')!)
-} else {
-  map.on('click', () => map.scrollWheelZoom.enable())
-  map.getContainer().addEventListener('mouseleave', () => map.scrollWheelZoom.disable())
 }
 // Peta dasar yang bisa dipilih pengunjung. Semua tanpa kunci API; atribusi tampil di kredit peta.
 // Foto satelit harian NASA: VIIRS NOAA-21 melintas di atas Indonesia ±05.00–07.00 UTC dan baru tersedia beberapa
@@ -378,6 +374,74 @@ function setBasemap(key: BasemapKey) {
 }
 
 L.control.zoom({ position: 'bottomright' }).addTo(map)
+
+// Layar penuh untuk bingkai peta (beserta panel lapisan, legenda, dan penggeser waktu). iPhone tidak mendukung
+// layar penuh selain video, jadi di sana (dan bila ditolak browser) peta dibentangkan memenuhi layar dengan CSS.
+const ICON_EXPAND = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'
+const ICON_SHRINK = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>'
+const mapFrame = document.querySelector<HTMLElement>('.map-frame')!
+let fullscreenButton: HTMLAnchorElement | null = null
+const isMapFull = () => document.fullscreenElement === mapFrame || mapFrame.classList.contains('is-full')
+
+function syncFullscreen() {
+  const full = isMapFull()
+  document.body.classList.toggle('map-full', mapFrame.classList.contains('is-full'))
+  if (fullscreenButton) {
+    fullscreenButton.innerHTML = full ? ICON_SHRINK : ICON_EXPAND
+    fullscreenButton.title = full ? 'Keluar dari layar penuh' : 'Layar penuh'
+    fullscreenButton.setAttribute('aria-label', fullscreenButton.title)
+    fullscreenButton.setAttribute('aria-pressed', String(full))
+  }
+  // Di layar penuh peta langsung bisa digeser; setelah keluar, kunci sentuh berlaku lagi.
+  if (touchScreen) {
+    if (full) map.dragging.enable()
+    else map.dragging.disable()
+    mapUnlock.hidden = full
+  }
+  map.invalidateSize()
+}
+
+function toggleFullscreen() {
+  if (document.fullscreenElement === mapFrame) {
+    void document.exitFullscreen()
+    return
+  }
+  if (mapFrame.classList.contains('is-full')) {
+    mapFrame.classList.remove('is-full')
+    syncFullscreen()
+    return
+  }
+  const fallback = () => {
+    mapFrame.classList.add('is-full')
+    syncFullscreen()
+  }
+  if (document.fullscreenEnabled && mapFrame.requestFullscreen) mapFrame.requestFullscreen().catch(fallback)
+  else fallback()
+}
+
+const FullscreenControl = L.Control.extend({
+  onAdd() {
+    const bar = L.DomUtil.create('div', 'leaflet-bar map-fullscreen')
+    fullscreenButton = L.DomUtil.create('a', '', bar) as HTMLAnchorElement
+    fullscreenButton.href = '#'
+    fullscreenButton.setAttribute('role', 'button')
+    L.DomEvent.disableClickPropagation(bar)
+    L.DomEvent.on(fullscreenButton, 'click', (event) => {
+      L.DomEvent.preventDefault(event)
+      toggleFullscreen()
+    })
+    syncFullscreen()
+    return bar
+  },
+})
+new FullscreenControl({ position: 'bottomright' }).addTo(map)
+document.addEventListener('fullscreenchange', syncFullscreen)
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && mapFrame.classList.contains('is-full')) {
+    mapFrame.classList.remove('is-full')
+    syncFullscreen()
+  }
+})
 L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 120 }).addTo(map)
 map.createPane('areas').style.zIndex = '350'
 map.createPane('smoke').style.zIndex = '380'
@@ -1315,11 +1379,26 @@ for (const kind of ['konservasi', 'lindung'] as const) {
     else layer.remove()
   })
 }
-// Di ponsel panel lapisan dilipat agar tidak menutupi peta; tombol 'Lapisan peta' membukanya.
-byId('map-layers-toggle').addEventListener('click', (event) => {
-  const open = byId('map-layers').classList.toggle('open')
-  ;(event.currentTarget as HTMLButtonElement).setAttribute('aria-expanded', String(open))
-})
+// Panel pengatur peta bisa dilipat agar peta lebih lega. Bawaan: terbuka di layar lebar, terlipat di ponsel;
+// pilihan terakhir pengunjung diingat di browser.
+function setLayerPanelOpen(open: boolean, remember: boolean) {
+  byId('map-layers').classList.toggle('open', open)
+  byId('map-layers-toggle').setAttribute('aria-expanded', String(open))
+  if (!remember) return
+  try {
+    localStorage.setItem('panel-lapisan', open ? 'buka' : 'tutup')
+  } catch {
+    // Penyimpanan lokal bisa tidak tersedia (mode privat); pilihan berlaku untuk sesi ini saja.
+  }
+}
+let savedLayerPanel: string | null = null
+try {
+  savedLayerPanel = localStorage.getItem('panel-lapisan')
+} catch {
+  // Pakai bawaan.
+}
+setLayerPanelOpen(savedLayerPanel ? savedLayerPanel === 'buka' : !window.matchMedia('(max-width: 720px)').matches, false)
+byId('map-layers-toggle').addEventListener('click', () => setLayerPanelOpen(!byId('map-layers').classList.contains('open'), true))
 // Di layar pendek panel lapisan bisa digulir; saat grup dibuka, gulir agar semua lapisannya langsung terlihat.
 document.querySelector<HTMLDetailsElement>('.layer-more')?.addEventListener('toggle', (event) => {
   const details = event.currentTarget as HTMLDetailsElement
