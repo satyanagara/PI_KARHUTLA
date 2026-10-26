@@ -2983,6 +2983,11 @@ tbody tr:hover td {
   color: var(--fire);
 }
 
+.menu-toggle,
+.nav-backdrop {
+  display: none;
+}
+
 .topbar-brand {
   display: none;
   align-items: center;
@@ -3186,8 +3191,99 @@ tbody tr:hover td {
     height: auto;
   }
 
+  /* Sidebar menjadi laci dari kiri; tampilan ikon-saja dari tablet dikembalikan ke tampilan penuh. */
   .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3000;
+    width: min(280px, 84vw);
+    align-items: stretch;
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 8px 0 30px rgb(0 0 0 / 0.25);
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition: transform 0.22s ease, visibility 0.22s;
+  }
+
+  body.nav-open .sidebar {
+    transform: none;
+    visibility: visible;
+  }
+
+  body.nav-open {
+    overflow: hidden;
+  }
+
+  .nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2900;
+    display: block;
+    background: rgb(10 18 14 / 0.45);
+  }
+
+  .nav-backdrop[hidden] {
     display: none;
+  }
+
+  .sidebar .brand {
+    padding: 0 8px 26px;
+  }
+
+  .sidebar .brand-name,
+  .sidebar .sidebar-foot {
+    display: block;
+  }
+
+  .sidebar .side-label {
+    display: block;
+  }
+
+  .sidebar .source-card div {
+    display: flex;
+  }
+
+  .sidebar .source-orbit {
+    display: grid;
+  }
+
+  .sidebar .source-card {
+    justify-content: flex-start;
+    width: auto;
+    height: auto;
+    padding: 11px;
+  }
+
+  .sidebar .nav-link {
+    justify-content: flex-start;
+    width: 100%;
+    height: auto;
+    padding: 12px 10px;
+    font-size: 15px;
+  }
+
+  .menu-toggle {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 40px;
+    height: 40px;
+    margin-left: -8px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    cursor: pointer;
+  }
+
+  .menu-toggle span {
+    display: block;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--ink);
   }
 
   .workspace {

@@ -74,7 +74,7 @@ let activeDays: number = (DAY_OPTIONS as readonly number[]).includes(Number(para
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
   <div class="shell">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <a class="brand" href="#overview" aria-label="AMUK API - Pemantau Independen Karhutla">
         <span class="brand-mark"><span></span></span>
         <span class="brand-name"><small class="brand-kicker">PEMANTAU INDEPENDEN KARHUTLA</small>AMUK <span>API</span></span>
@@ -100,8 +100,11 @@ app.innerHTML = `
       </div>
     </aside>
 
+    <div class="nav-backdrop" id="nav-backdrop" hidden></div>
+
     <main class="workspace" id="overview">
       <header class="topbar">
+        <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Buka menu" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
         <a class="topbar-brand" href="#overview" aria-label="AMUK API - Pemantau Independen Karhutla"><span class="brand-mark"><span></span></span><span><small>PEMANTAU INDEPENDEN KARHUTLA</small><span>AMUK <b>API</b></span></span></a>
         <div class="crumb"><span>PEMANTAUAN</span><b>/</b> Indonesia</div>
         <div class="top-actions">
@@ -1394,6 +1397,22 @@ byId('priority-rows').addEventListener('click', (event) => {
   if (!cluster) return
   byId('map-section').scrollIntoView({ behavior: 'smooth' })
   map.flyTo([cluster.lat, cluster.lon], 9, { duration: 0.8 })
+})
+
+// Ponsel: sidebar menjadi laci dari kiri, dibuka dengan tombol menu di bilah atas.
+const menuToggle = byId<HTMLButtonElement>('menu-toggle')
+const navBackdrop = byId('nav-backdrop')
+function setNavOpen(open: boolean) {
+  document.body.classList.toggle('nav-open', open)
+  navBackdrop.hidden = !open
+  menuToggle.setAttribute('aria-expanded', String(open))
+  menuToggle.setAttribute('aria-label', open ? 'Tutup menu' : 'Buka menu')
+}
+menuToggle.addEventListener('click', () => setNavOpen(!document.body.classList.contains('nav-open')))
+navBackdrop.addEventListener('click', () => setNavOpen(false))
+document.querySelectorAll('.sidebar a').forEach((link) => link.addEventListener('click', () => setNavOpen(false)))
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && document.body.classList.contains('nav-open')) setNavOpen(false)
 })
 
 const navLinks = document.querySelectorAll<HTMLAnchorElement>('.side-nav .nav-link')
