@@ -6,6 +6,7 @@ import { VULNERABLE_SHORT, checklist, cigaretteText, shareCardImage, shareMenu, 
 import { levelIcon, levelMeter } from './icons.ts'
 import { FlameLayer } from './flames.ts'
 import { hourText, stampText } from './timefmt.ts'
+import { WindLayer, type WindGrid } from './windparticles.ts'
 import { footballFields, prognosis, speciesText, visibilityComparison, wildlifeFor } from './context.ts'
 import { DAY_OPTIONS, DEFAULT_SOURCE, FLAG_STATIONARY, SOURCES, type BmkgForecast, type BnpbReport, type TimelineDay, type TimelineReport, type CctvReport, type LocationCheck, type Report, type ReportFire, type Source } from './report-types.ts'
 
@@ -17,6 +18,8 @@ const sourceNames: Record<Source, string> = {
   BRIN_LAPAN: 'BRIN/LAPAN · SiPongi (resmi)',
 }
 const AREA_SOURCE = 'Kementerian Kehutanan (SIGAP)'
+const ICON_PLAY = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15l12-7.5z"/></svg>'
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>'
 
 // Area penting lainnya dari SIGAP Kementerian Kehutanan; masing-masing dimuat hanya saat dicentang.
 type Overlay = { id: string; label: string; hint: string; style: (feature?: GeoJSON.Feature) => L.PathOptions; tooltip: (properties: Record<string, string>) => string }
@@ -160,10 +163,10 @@ app.innerHTML = `
             <div id="fire-map" role="img" aria-label="Peta Indonesia dengan titik panas terdeteksi"></div>
             <button type="button" class="map-unlock" id="map-unlock" hidden><span>Ketuk untuk menjelajah peta</span></button>
             <div class="map-overline"><span class="map-crosshair">⌖</span> WILAYAH PEMANTAUAN <b>INDONESIA</b></div>
-            <div class="map-layers" id="map-layers" aria-label="Lapisan peta"><button type="button" class="map-layers-toggle" id="map-layers-toggle" aria-expanded="false">Lapisan peta</button><div class="map-layers-body"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label title="Perkiraan PM2.5 model CAMS pada grid ±55 km, saat ini hingga 4 hari ke depan"><input type="checkbox" id="layer-smokegrid" /><i class="layer-swatch smokegrid"></i> Sebaran asap (model)</label><label><input type="checkbox" id="layer-konservasi" checked /><i class="layer-swatch konservasi"></i> Kawasan konservasi</label><label><input type="checkbox" id="layer-lindung" checked /><i class="layer-swatch lindung"></i> Hutan lindung</label><label><input type="checkbox" id="layer-peat" /><i class="layer-swatch gambut"></i> Lahan gambut (KHG)</label><details class="layer-more"><summary>Area penting lainnya</summary>${OVERLAYS.map((overlay) => `<label title="${escapeHtml(overlay.hint)}"><input type="checkbox" id="layer-${overlay.id}" data-overlay="${overlay.id}" /><i class="layer-swatch ${overlay.id}"></i> ${escapeHtml(overlay.label)}</label>`).join('')}</details></div></div>
+            <div class="map-layers" id="map-layers" aria-label="Lapisan peta"><button type="button" class="map-layers-toggle" id="map-layers-toggle" aria-expanded="false">Lapisan peta</button><div class="map-layers-body"><label class="basemap-pick"><span>Peta dasar</span><select id="basemap-select" aria-label="Pilih peta dasar"></select></label><label><input type="checkbox" id="layer-smoke" checked /> Jalur asap</label><label title="Perkiraan PM2.5 model CAMS pada grid ±55 km, saat ini hingga 4 hari ke depan"><input type="checkbox" id="layer-smokegrid" /><i class="layer-swatch smokegrid"></i> Sebaran asap (model)</label><label title="Animasi arah dan kecepatan angin dari prakiraan model, mengikuti waktu sebaran asap"><input type="checkbox" id="layer-wind" /><i class="layer-swatch wind"></i> Aliran angin (animasi)</label><label><input type="checkbox" id="layer-konservasi" checked /><i class="layer-swatch konservasi"></i> Kawasan konservasi</label><label><input type="checkbox" id="layer-lindung" checked /><i class="layer-swatch lindung"></i> Hutan lindung</label><label><input type="checkbox" id="layer-peat" /><i class="layer-swatch gambut"></i> Lahan gambut (KHG)</label><details class="layer-more"><summary>Area penting lainnya</summary>${OVERLAYS.map((overlay) => `<label title="${escapeHtml(overlay.hint)}"><input type="checkbox" id="layer-${overlay.id}" data-overlay="${overlay.id}" /><i class="layer-swatch ${overlay.id}"></i> ${escapeHtml(overlay.label)}</label>`).join('')}</details></div></div>
             <div class="map-legend"><span title="Titik keyakinan tinggi yang bukan sumber panas tetap; dianimasikan sebagai nyala api"><i class="legend-flame"></i> Diyakini kebakaran</span><span><i class="legend-fire strong"></i> Tinggi</span><span><i class="legend-fire medium"></i> Sedang</span><span><i class="legend-fire low"></i> Rendah</span><span title="Terdeteksi berulang di titik yang sama dekat permukiman; tidak dihitung dalam analisis risiko"><i class="legend-fire stationary"></i> Sumber panas tetap</span></div>
             <div class="map-loading visible" id="map-message"><span class="map-message-icon">⌖</span><strong>Memuat data hotspot</strong><small>Mengambil deteksi satelit terbaru…</small><button id="map-retry" hidden>Coba lagi <span>↻</span></button></div>
-            <div class="smoke-time" id="smoke-time" hidden><div class="smoke-time-head"><strong>Sebaran asap</strong><span id="smoke-time-label">Memuat…</span></div><input type="range" id="smoke-time-range" min="0" max="0" step="1" value="0" aria-label="Waktu sebaran asap" /><div class="smoke-time-legend"><span><i style="background:#3a7bc8"></i>Sedang</span><span><i style="background:#e0b11f"></i>Tidak sehat</span><span><i style="background:#d8432c"></i>Sangat tidak sehat</span><span><i style="background:#2a1d1b"></i>Berbahaya</span></div></div>
+            <div class="smoke-time" id="smoke-time" hidden><div class="smoke-time-head"><button type="button" class="smoke-play" id="smoke-play" aria-label="Putar animasi">${ICON_PLAY}</button><strong>Prakiraan asap &amp; angin</strong><span id="smoke-time-label">Memuat…</span><button type="button" class="smoke-speed" id="smoke-speed" title="Kecepatan putar">1×</button></div><input type="range" id="smoke-time-range" min="0" max="0" step="any" value="0" aria-label="Waktu sebaran asap" /><small class="smoke-time-note">Prakiraan model CAMS, bukan rekaman; grid ±55 km.</small><div class="smoke-time-legend"><span><i style="background:#3a7bc8"></i>Sedang</span><span><i style="background:#e0b11f"></i>Tidak sehat</span><span><i style="background:#d8432c"></i>Sangat tidak sehat</span><span><i style="background:#2a1d1b"></i>Berbahaya</span></div></div>
             <div class="map-credit"><span id="basemap-credit"></span> · Kawasan hutan, KHG, PIPPIB, KEE, hutan adat, mangrove &amp; kerawanan karhutla © ${AREA_SOURCE} · Permukiman © GeoNames · Prakiraan cuaca: BMKG · Asap: Open-Meteo/CAMS · Hotspot: NASA FIRMS, BRIN/LAPAN (SiPongi) · Laporan: BNPB</div>
           </div>
         </section>
@@ -365,6 +368,8 @@ function setBasemap(key: BasemapKey) {
   basemapLayer = L.tileLayer(basemap.url, { maxZoom: basemap.maxZoom, maxNativeZoom: 'maxNativeZoom' in basemap ? basemap.maxNativeZoom : undefined }).addTo(map)
   basemapLayer.bringToBack()
   byId('basemap-credit').textContent = basemap.credit
+  // Partikel angin putih di atas foto satelit, gelap di atas peta terang.
+  windLayer.setColor(basemap.key.includes('satellite') || basemap.key === 'nasa-viirs' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(25, 45, 60, 0.6)')
   byId<HTMLSelectElement>('basemap-select').value = basemap.key
   try {
     localStorage.setItem('peta-dasar', basemap.key)
@@ -453,9 +458,11 @@ const areaLayers: Partial<Record<'konservasi' | 'lindung', L.GeoJSON>> = {}
 let areaLoad: Promise<void> | null = null
 const overlayLayers: Record<string, L.GeoJSON> = {}
 const smokeGridLayer = L.layerGroup()
-let smokeGrid: { fetchedAt: string; times: string[]; points: [number, number][]; values: number[][]; step: number } | null = null
+let smokeGrid: { fetchedAt: string; times: string[]; points: [number, number][]; values: number[][]; step: number; wind?: WindGrid } | null = null
 let smokeGridCells: L.Rectangle[] = []
-let smokeGridIndex = 0
+// Waktu tampil sebagai indeks pecahan (mis. 4,5 = di antara langkah ke-4 dan ke-5) agar animasi berpindah halus.
+let smokeGridTime = 0
+const windLayer = new WindLayer()
 let smokeGridRetries = 0
 const overlayLoads: Record<string, Promise<void>> = {}
 let peatLayer: L.GeoJSON | null = null
@@ -1040,16 +1047,73 @@ function loadAreas() {
 
 const SMOKE_GRID_OPACITY: Record<string, number> = { sedang: 0.16, 'tidak-sehat': 0.3, 'sangat-tidak-sehat': 0.4, berbahaya: 0.5 }
 
+const SMOKE_STEP_MS = 3 * 3600 * 1000
+
+// Nilai PM2.5 di waktu pecahan: interpolasi linear antara dua langkah prakiraan.
+function smokeValueAt(index: number) {
+  const values = smokeGrid!.values
+  const time = Math.min(values.length - 1, Math.max(0, smokeGridTime))
+  const t0 = Math.floor(time)
+  const t1 = Math.min(values.length - 1, t0 + 1)
+  const a = values[t0][index]
+  const b = values[t1][index]
+  if (a < 0 || b < 0) return a < 0 ? b : a
+  return a + (b - a) * (time - t0)
+}
+
+const smokeTimeMs = () => Date.parse(`${smokeGrid!.times[0]}:00:00Z`) + smokeGridTime * SMOKE_STEP_MS
+
 function paintSmokeGrid() {
   if (!smokeGrid) return
-  const values = smokeGrid.values[smokeGridIndex]
-  smokeGridCells.forEach((cell, index) => {
-    const pm25 = values[index]
-    const level = ispuLevel(pm25 < 0 ? null : pm25)
-    const opacity = SMOKE_GRID_OPACITY[level.key] ?? 0
-    cell.setStyle({ fillColor: level.color, fillOpacity: opacity })
-  })
-  byId('smoke-time-label').textContent = stampText(`${smokeGrid.times[smokeGridIndex]}:00:00Z`)
+  if (map.hasLayer(smokeGridLayer)) {
+    smokeGridCells.forEach((cell, index) => {
+      const pm25 = smokeValueAt(index)
+      const level = ispuLevel(pm25 < 0 ? null : pm25)
+      cell.setStyle({ fillColor: level.color, fillOpacity: SMOKE_GRID_OPACITY[level.key] ?? 0 })
+    })
+  }
+  windLayer.setTime(smokeTimeMs())
+  // Label dibulatkan ke jam penuh terdekat.
+  byId('smoke-time-label').textContent = stampText(new Date(Math.round(smokeTimeMs() / 3600000) * 3600000).toISOString())
+  byId<HTMLInputElement>('smoke-time-range').value = String(smokeGridTime)
+}
+
+// ---------- Putar animasi ----------
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+let playing = false
+let playSpeed = 1
+let playFrame = 0
+let playAutoStarted = false
+
+function setPlaying(on: boolean) {
+  playing = on && !!smokeGrid
+  const button = byId<HTMLButtonElement>('smoke-play')
+  button.innerHTML = playing ? ICON_PAUSE : ICON_PLAY
+  button.setAttribute('aria-label', playing ? 'Jeda animasi' : 'Putar animasi')
+  cancelAnimationFrame(playFrame)
+  if (!playing) return
+  const last = smokeGrid!.times.length - 1
+  if (smokeGridTime >= last) smokeGridTime = 0
+  let previous = performance.now()
+  let painted = 0
+  const tick = (now: number) => {
+    // 2 langkah (6 jam prakiraan) per detik pada 1×: 4 hari ke depan ±16 detik. Cap waktu bingkai pertama bisa
+    // sedikit lebih awal dari performance.now() saat tombol diklik, jadi selisih negatif diabaikan.
+    smokeGridTime = Math.min(last, Math.max(0, smokeGridTime + (Math.max(0, now - previous) / 1000) * 2 * playSpeed))
+    previous = now
+    // Mewarnai ulang ±870 kotak cukup ±12 kali per detik; partikel angin bergerak dengan iramanya sendiri.
+    if (now - painted > 80 || smokeGridTime >= last) {
+      painted = now
+      paintSmokeGrid()
+    }
+    if (smokeGridTime >= last) {
+      setPlaying(false)
+      return
+    }
+    playFrame = requestAnimationFrame(tick)
+  }
+  playFrame = requestAnimationFrame(tick)
 }
 
 function buildSmokeGrid() {
@@ -1058,7 +1122,7 @@ function buildSmokeGrid() {
   const half = smokeGrid.step / 2
   smokeGridCells = smokeGrid.points.map(([lat, lon], index) => L.rectangle([[lat - half, lon - half], [lat + half, lon + half]], { pane: 'smoke', stroke: false, fillOpacity: 0, interactive: true })
     .bindTooltip(() => {
-      const pm25 = smokeGrid!.values[smokeGridIndex][index]
+      const pm25 = Math.round(smokeValueAt(index))
       return pm25 < 0 ? 'Data tidak tersedia' : `PM2.5 ±${pm25} µg/m³ · ${ispuLevel(pm25).label}<br><small>Perkiraan model CAMS, grid ±55 km</small>`
     }, { sticky: true })
     .addTo(smokeGridLayer))
@@ -1066,9 +1130,14 @@ function buildSmokeGrid() {
   range.max = String(smokeGrid.times.length - 1)
   // Mulai dari jam terdekat dengan sekarang.
   const nowHour = new Date().toISOString().slice(0, 13)
-  smokeGridIndex = Math.max(0, smokeGrid.times.findIndex((time) => time >= nowHour))
-  range.value = String(smokeGridIndex)
+  smokeGridTime = Math.max(0, smokeGrid.times.findIndex((time) => time >= nowHour))
+  if (smokeGrid.wind) windLayer.setWind(smokeGrid.wind)
   paintSmokeGrid()
+  // Putar otomatis sekali saat data pertama kali tampil, kecuali pengunjung memilih "kurangi gerakan".
+  if (!playAutoStarted && !reduceMotion.matches) {
+    playAutoStarted = true
+    setPlaying(true)
+  }
 }
 
 async function loadSmokeGrid() {
@@ -1355,17 +1424,35 @@ document.querySelectorAll<HTMLButtonElement>('[data-days]').forEach((button) => 
   })
 })
 
+// Panel waktu tampil bila sebaran asap atau aliran angin aktif; keduanya memakai data dan waktu yang sama.
+function syncSmokePanel() {
+  const any = map.hasLayer(smokeGridLayer) || map.hasLayer(windLayer)
+  byId('smoke-time').hidden = !any
+  if (!any) setPlaying(false)
+  else if (!smokeGrid) void loadSmokeGrid()
+  else paintSmokeGrid()
+}
 byId<HTMLInputElement>('layer-smokegrid').addEventListener('change', (event) => {
-  const on = (event.target as HTMLInputElement).checked
-  byId('smoke-time').hidden = !on
-  if (on) {
-    smokeGridLayer.addTo(map)
-    if (!smokeGrid) void loadSmokeGrid()
-  } else smokeGridLayer.remove()
+  if ((event.target as HTMLInputElement).checked) smokeGridLayer.addTo(map)
+  else smokeGridLayer.remove()
+  syncSmokePanel()
+})
+byId<HTMLInputElement>('layer-wind').addEventListener('change', (event) => {
+  if ((event.target as HTMLInputElement).checked) {
+    windLayer.addTo(map)
+    if (smokeGrid?.wind) windLayer.setWind(smokeGrid.wind)
+  } else windLayer.remove()
+  syncSmokePanel()
 })
 byId<HTMLInputElement>('smoke-time-range').addEventListener('input', (event) => {
-  smokeGridIndex = Number((event.target as HTMLInputElement).value)
+  setPlaying(false)
+  smokeGridTime = Number((event.target as HTMLInputElement).value)
   paintSmokeGrid()
+})
+byId('smoke-play').addEventListener('click', () => setPlaying(!playing))
+byId('smoke-speed').addEventListener('click', (event) => {
+  playSpeed = playSpeed === 1 ? 2 : 1
+  ;(event.currentTarget as HTMLButtonElement).textContent = `${playSpeed}×`
 })
 byId<HTMLInputElement>('layer-smoke').addEventListener('change', (event) => {
   if ((event.target as HTMLInputElement).checked) smokeLayer.addTo(map)
@@ -1515,7 +1602,7 @@ setInterval(() => {
     void refreshData()
     void loadBnpb()
     void loadTimeline()
-    if (map.hasLayer(smokeGridLayer)) void loadSmokeGrid()
+    if (map.hasLayer(smokeGridLayer) || map.hasLayer(windLayer)) void loadSmokeGrid()
   }
 }, AUTO_REFRESH_MS)
 

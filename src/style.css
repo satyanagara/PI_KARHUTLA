@@ -2506,8 +2506,55 @@ tbody tr:hover td {
 }
 
 .smoke-time-head strong {
+  flex: 1;
   color: var(--ink);
 }
+
+.smoke-time-head {
+  align-items: center;
+}
+
+.smoke-play,
+.smoke-speed {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.smoke-play {
+  width: 28px;
+  background: var(--fire);
+  font-size: 11px;
+  color: #fff;
+}
+
+.smoke-speed {
+  min-width: 34px;
+  padding: 0 8px;
+  background: var(--bg);
+  color: var(--ink-soft);
+}
+
+.smoke-time-note {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+
+.wind-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.layer-swatch.wind { border-color: #2c4a5e; background: repeating-linear-gradient(90deg, rgb(44 74 94 / 0.55) 0 4px, transparent 4px 7px); }
 
 .smoke-time input[type='range'] {
   width: 100%;
