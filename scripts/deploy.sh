@@ -3,7 +3,8 @@
 #   1. lokal : semua perubahan harus sudah di-commit (atau beri PESAN="..." untuk add + commit otomatis), lalu push
 #   2. server: git pull --ff-only di ~/pemantau-karhutla (di-clone sekali bila belum), cek commit sama dengan lokal
 #   3. server: tulis .env (FIRMS_MAP_KEY, TRUST_PROXY, GA_MEASUREMENT_ID bila ada), build image, ganti container
-# Kredensial SSH dibaca dari secrets/server.txt bagian [target]; kata sandi tidak pernah ditampilkan.
+# Server tujuan dibaca dari secrets/server.txt bagian [SERVER] (ganti dengan SERVER_SECTION=nama). Login memakai kunci SSH;
+# bila bagian itu berisi auth = password, dipakai kata sandi lewat sshpass (tidak pernah ditampilkan).
 #
 #   npm run deploy                         # bila semua sudah di-commit
 #   PESAN="fix: ..." npm run deploy        # add + commit + push + deploy sekaligus
@@ -17,11 +18,17 @@ PORT_APP="${PORT_APP:-8787}"
 BRANCH=main
 REPO_URL="$(git -C "$ROOT" remote get-url origin)"
 
-get() { awk -v s="[target]" -v k="$1" '$0==s{f=1;next} /^\[/{f=0} f && $1==k {sub(/^[^=]*=[ \t]*/,""); print; exit}' "$CFG"; }
+SECTION="[${SERVER_SECTION:-SERVER}]"
+get() { awk -v s="$SECTION" -v k="$1" '$0==s{f=1;next} /^\[/{f=0} f && $1==k {sub(/^[^=]*=[ \t]*/,""); print; exit}' "$CFG"; }
 HOST=$(get host); USER_=$(get user); PORT=$(get port); PORT=${PORT:-22}
-export SSHPASS="$(get password)"
-SSH_OPTS="-p $PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=60 -o ServerAliveInterval=15 -o PubkeyAuthentication=no"
-remote() { sshpass -e ssh $SSH_OPTS "$USER_@$HOST" "$@"; }
+[ -n "$HOST" ] || { echo "Bagian $SECTION tidak ditemukan di secrets/server.txt"; exit 1; }
+SSH_OPTS="-p $PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=60 -o ServerAliveInterval=15"
+if [ "$(get auth)" = "password" ]; then
+  export SSHPASS="$(get password)"
+  remote() { sshpass -e ssh $SSH_OPTS -o PubkeyAuthentication=no "$USER_@$HOST" "$@"; }
+else
+  remote() { ssh $SSH_OPTS -o BatchMode=yes "$USER_@$HOST" "$@"; }
+fi
 
 KEY=$(sed -n 's/^FIRMS_MAP_KEY=//p' "$ROOT/.env.local")
 [ -n "$KEY" ] || { echo "FIRMS_MAP_KEY tidak ada di .env.local"; exit 1; }
